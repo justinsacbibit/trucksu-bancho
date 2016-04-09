@@ -31,7 +31,6 @@ defmodule Game.Mixfile do
     [{:phoenix, "~> 1.1.4"},
      {:gettext, "~> 0.9"},
      {:cowboy, "~> 1.0"},
-     {:exrm, "~> 0.18.1"},
-     {:trucksu, git: "git@github.com:justinsacbibit/trucksu-web.git", tag: "0.0.2"}]
+     {:trucksu, path: "./trucksu-web"}]
   end
 end

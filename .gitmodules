@@ -1,0 +1,3 @@
+[submodule "trucksu-web"]
+	path = trucksu-web
+	url = git@github.com:justinsacbibit/trucksu-web.git
