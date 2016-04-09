@@ -9,6 +9,8 @@ defmodule Game.Router do
     pipe_through :api
   end
 
-  # The following calls go to c.ppy.sh or c1.ppy.sh
-  post "/", Game.GameController, :index
+  scope "/", Game do
+    get "/", PageController, :index
+    post "/", GameController, :index
+  end
 end

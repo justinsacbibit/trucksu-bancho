@@ -1,6 +1,0 @@
----
-app_name: game
-repo_url: "git@github.com:justinsacbibit/trucksu-bancho.git"
-app_port: 4002
-setup_postgres: False
-build_frontend: False
