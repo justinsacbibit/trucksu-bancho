@@ -9,8 +9,8 @@ server {
   listen      443 ssl;
   server_name c.ppy.sh c1.ppy.sh;
 
-  ssl_certificate     {{ .APP_SSL_PATH }}/server.crt;
-  ssl_certificate_key {{ .APP_SSL_PATH }}/server.key;
+  ssl_certificate     /home/dokku/trucksu-web/tls/server.crt;
+  ssl_certificate_key /home/dokku/trucksu-web/tls/server.key;
 
   access_log /var/log/nginx/{{ .APP }}-access.log;
   error_log /var/log/nginx/{{ .APP }}-error.log;
