@@ -1,7 +1,7 @@
 defmodule Game.GameController do
   use Game.Web, :controller
   require Logger
-  alias Game.{ChannelServer, Packet, UserServer}
+  alias Game.{Packet, StateServer}
   alias Trucksu.{Repo, Session, User}
 
   def index(conn, _params) do
@@ -47,7 +47,7 @@ defmodule Game.GameController do
       {:ok, user} ->
         {:ok, jwt, _full_claims} = user |> Guardian.encode_and_sign(:token)
 
-        ensure_user_server_started(user.id, user.username, jwt)
+        StateServer.Client.add_user(user, jwt)
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
       :error ->
@@ -63,7 +63,8 @@ defmodule Game.GameController do
         # TODO: Consider preventing SQL queries when it is a pong packet
         #       and the packet queue is empty
         {:ok, user} = Guardian.serializer.from_token(claims["sub"])
-        get_user_server(user.id, user.username, osu_token)
+
+        # TODO: Return an error if the user is somehow not in the state
 
         data = Packet.Decoder.decode_packets(stacked_packets)
         |> Enum.reduce(<<>>, fn({packet_id, data}, acc) ->
@@ -244,4 +245,3 @@ defmodule Game.GameController do
     <> Packet.online_users
   end
 end
-

@@ -11,7 +11,7 @@ defmodule Game.StateServer do
   @doc """
   Starts the state server.
   """
-  def start_link() do
+  def start_link(name \\ @name) do
     state = %{
       users: %{},
 
@@ -21,17 +21,19 @@ defmodule Game.StateServer do
       end)
       |> Enum.into(%{}),
     }
-    GenServer.start_link(__MODULE__, state, name: @name)
+    GenServer.start_link(__MODULE__, state, name: name)
   end
 
   ## Server callbacks
 
-  # TODO: Tests, possibly make synchronous
+  # TODO: Possibly make synchronous
   def handle_cast({:add_user, user, token}, %{users: users, channels: channels} = state) do
 
     users = Map.put(users, user.id, %{
       username: user.username,
       token: token,
+      channels: Enum.into(@default_channels, MapSet.new()),
+      packet_queue: [],
     })
 
     # Add the user into the default channels
@@ -46,7 +48,31 @@ defmodule Game.StateServer do
     {:noreply, state}
   end
 
-  def handle_call(:users, _from, %{users: users} = state) do
+  def handle_cast({:enqueue, user_id, packet}, %{users: users} = state) do
+    user = users[user_id]
+    packet_queue = user.packet_queue ++ [packet]
+    user = %{user | packet_queue: packet_queue}
 
+    users = Map.put(users, user_id, user)
+
+    {:noreply, %{state | users: users}}
+  end
+
+  def handle_call({:dequeue, user_id}, _from, %{users: users} = state) do
+    user = users[user_id]
+    packet_queue = user.packet_queue
+    user = %{user | packet_queue: []}
+
+    users = Map.put(users, user_id, user)
+
+    {:reply, packet_queue, %{state | users: users}}
+  end
+
+  def handle_call(:channels, _from, %{channels: channels} = state) do
+    {:reply, channels, state}
+  end
+
+  def handle_call(:users, _from, %{users: users} = state) do
+    {:reply, users, state}
   end
 end

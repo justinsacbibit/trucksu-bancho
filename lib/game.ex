@@ -12,8 +12,7 @@ defmodule Game do
       # Here you could define other workers and supervisors as children
       supervisor(Trucksu.Repo, []),
       # worker(Game.Worker, [arg1, arg2, arg3]),
-      worker(Game.UserServer.Supervisor, []),
-      worker(Game.ChannelServer.Supervisor, []),
+      worker(Game.StateServer, [Game.StateServer]),
     ]
 
     # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html
