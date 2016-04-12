@@ -1,6 +1,6 @@
 defmodule Game.Packet do
   alias Game.Packet.Ids
-  alias Game.UserServer
+  alias Game.StateServer
   alias Trucksu.{Repo, UserStats}
   import Ecto.Query, only: [from: 2]
 
@@ -88,14 +88,11 @@ defmodule Game.Packet do
   end
 
   def online_users do
-    users = Supervisor.which_children(UserServer.Supervisor)
-    |> Enum.map(fn({user_id, _pid, _, _}) ->
-      user_id
-    end)
+    user_ids = StateServer.Client.users() |> Map.keys()
 
-    data = [{length(users), :int16}]
+    data = [{length(user_ids), :int16}]
 
-    data = data ++ Enum.map(users, &({&1, :int32}))
+    data = data ++ Enum.map(user_ids, &({&1, :int32}))
 
     new(Ids.server_userPresenceBundle, data)
   end
@@ -121,9 +118,12 @@ defmodule Game.Packet do
     ])
   end
 
-  def user_stats(user) do
-    action = UserServer.whereis(user.id)
-    |> GenServer.call(:action)
+  def user_stats(user, action \\ nil) do
+    action = if is_nil(action) do
+      StateServer.Client.action(user.id)
+    else
+      action
+    end
 
     user_id = user.id
     game_mode = action.game_mode

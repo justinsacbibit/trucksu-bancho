@@ -37,6 +37,16 @@ defmodule Game.StateServer.Client do
   end
 
   @doc """
+  Enqueues a packet to be sent to all users.
+  """
+  def enqueue_all(server, packet) do
+    GenServer.cast(server, {:enqueue_all, packet})
+  end
+  def enqueue_all(packet) do
+    enqueue(@name, packet)
+  end
+
+  @doc """
   Dequeues all packets to be sent to a user.
 
   Returns the packet queue.
@@ -56,5 +66,37 @@ defmodule Game.StateServer.Client do
   end
   def channels() do
     channels(@name)
+  end
+
+  @doc """
+  Sends a message to a channel.
+  """
+  def send_message()
+
+  @doc """
+  Changes the current action for a user.
+  """
+  def change_action(server, user_id, action) do
+    GenServer.cast(server, {:change_action, user_id, action})
+  end
+  def change_action(user_id, action) do
+    change_action(@name, user_id, action)
+  end
+
+  @doc """
+  Returns the current action for a user.
+
+  The return format is a keyword list with the following keys:
+    - action_id
+    - action_text
+    - action_md5
+    - action_mods
+    - game_mode
+  """
+  def action(server, user_id) do
+    GenServer.call(server, {:action, user_id})
+  end
+  def action(user_id) do
+    action(@name, user_id)
   end
 end

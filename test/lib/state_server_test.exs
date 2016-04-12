@@ -77,4 +77,40 @@ defmodule StateServerTest do
 
     assert length(packet_queue) == 0
   end
+
+  test "enqueue and dequeue a packet for all users", %{server: server} do
+    user_id = 1
+    username = "Truck Driver"
+    token = "abc123"
+    user = %{id: user_id, username: username}
+
+    StateServer.Client.add_user(server, user, token)
+
+    StateServer.Client.enqueue_all(server, <<1>>)
+
+    packet_queue = StateServer.Client.dequeue(server, user_id)
+
+    assert length(packet_queue) == 1
+
+    [packet] = packet_queue
+    assert packet == <<1>>
+
+    packet_queue = StateServer.Client.dequeue(server, user_id)
+
+    assert length(packet_queue) == 0
+  end
+
+  test "change and get action for a user", %{server: server} do
+    user_id = 1
+    username = "Truck Driver"
+    token = "abc123"
+    user = %{id: user_id, username: username}
+
+    StateServer.Client.add_user(server, user, token)
+
+    action = [action_id: 0, action_text: "", action_md5: "", action_mods: 0]
+    StateServer.Client.change_action(server, user_id, action)
+
+    assert StateServer.Client.action(server, user_id) == action
+  end
 end

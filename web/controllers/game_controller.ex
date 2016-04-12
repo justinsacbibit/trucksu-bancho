@@ -10,29 +10,6 @@ defmodule Game.GameController do
     handle_request(conn, body, osu_token)
   end
 
-  defp get_user_server(user_id, username \\ nil, token \\ nil, force_restart \\ false) do
-    case UserServer.whereis(user_id) do
-      nil ->
-        Logger.info "starting user server for #{user_id}"
-        {:ok, pid} = UserServer.Supervisor.start_user_server(user_id: user_id, username: username, token: token)
-        pid
-      pid ->
-        if force_restart do
-          Logger.info "Restarting user server for #{user_id}"
-          UserServer.Supervisor.terminate_child(user_id)
-          UserServer.Supervisor.delete_child(user_id)
-          {:ok, pid} = UserServer.Supervisor.start_user_server(user_id: user_id, username: username, token: token)
-          pid
-        else
-          pid
-        end
-    end
-  end
-
-  defp ensure_user_server_started(user_id, username, token) do
-    get_user_server(user_id, username, token, true)
-  end
-
   def send_packet(packet_id, data, user) do
     handle_packet(packet_id, data, user)
   end
@@ -71,7 +48,7 @@ defmodule Game.GameController do
           acc <> handle_packet(packet_id, data, user)
         end)
 
-        packet_queue = get_user_server(user.id) |> GenServer.call(:dequeue_all)
+        packet_queue = StateServer.Client.dequeue(user.id)
         data <> Enum.reduce(packet_queue, <<>>, fn(packet, acc) ->
           acc <> packet
         end)
@@ -87,11 +64,10 @@ defmodule Game.GameController do
     Logger.debug "Handling changeAction: data: #{inspect data}, user id: #{user.id}"
     # TODO: Possibly enqueue user panel as well..
 
-    UserServer.whereis(user.id)
-    |> GenServer.cast({:change_action, data})
+    StateServer.Client.change_action(user.id, data)
 
-    packet = Packet.user_stats(user)
-    UserServer.Supervisor.enqueue_all(packet)
+    packet = Packet.user_stats(user, data)
+    StateServer.Client.enqueue_all(packet)
     <<>>
   end
 

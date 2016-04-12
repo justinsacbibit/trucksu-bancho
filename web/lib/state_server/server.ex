@@ -34,6 +34,13 @@ defmodule Game.StateServer do
       token: token,
       channels: Enum.into(@default_channels, MapSet.new()),
       packet_queue: [],
+      action: [
+        action_id: 0,
+        action_text: "",
+        action_md5: "",
+        action_mods: 0,
+        game_mode: 0,
+      ],
     })
 
     # Add the user into the default channels
@@ -58,6 +65,23 @@ defmodule Game.StateServer do
     {:noreply, %{state | users: users}}
   end
 
+  def handle_cast({:enqueue_all, packet}, %{users: users} = state) do
+    users = Enum.map(users, fn({user_id, user}) ->
+      packet_queue = user.packet_queue ++ [packet]
+      {user_id, %{user | packet_queue: packet_queue}}
+    end)
+    |> Enum.into(%{})
+
+    {:noreply, %{state | users: users}}
+  end
+
+  def handle_cast({:change_action, user_id, action}, %{users: users} = state) do
+    user = Map.get(users, user_id)
+    user = %{user | action: action}
+    users = Map.put(users, user_id, user)
+    {:noreply, %{state | users: users}}
+  end
+
   def handle_call({:dequeue, user_id}, _from, %{users: users} = state) do
     user = users[user_id]
     packet_queue = user.packet_queue
@@ -74,5 +98,11 @@ defmodule Game.StateServer do
 
   def handle_call(:users, _from, %{users: users} = state) do
     {:reply, users, state}
+  end
+
+  def handle_call({:action, user_id}, _from, %{users: users} = state) do
+    action = Map.get(users, user_id).action
+
+    {:reply, action, state}
   end
 end
