@@ -1,0 +1,2 @@
+- If handling a login for a user that is already in the state, reset that state and remove the user from any channels that they're in
+- Add REST API or Phoenix channel(s) for retrieving server state
