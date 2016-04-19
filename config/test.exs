@@ -8,3 +8,11 @@ config :game, Game.Endpoint,
 
 # Print only warnings and errors during test
 config :logger, level: :warn
+
+config :trucksu, Trucksu.Repo,
+  adapter: Ecto.Adapters.Postgres,
+  username: "postgres_db",
+  password: "postgres_db",
+  database: "trucksu_test",
+  hostname: "localhost",
+  pool: Ecto.Adapters.SQL.Sandbox

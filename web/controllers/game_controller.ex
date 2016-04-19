@@ -67,7 +67,13 @@ defmodule Game.GameController do
 
         data = Packet.Decoder.decode_packets(stacked_packets)
         |> Enum.reduce(<<>>, fn({packet_id, data}, acc) ->
-          acc <> handle_packet(packet_id, data, user)
+          packet_response = handle_packet(packet_id, data, user)
+
+          if is_nil(packet_response) do
+            Logger.error "nil packet response: #{inspect packet_id}, #{inspect data}"
+          end
+
+          acc <> packet_response
         end)
 
         packet_queue = get_user_server(user.id) |> GenServer.call(:dequeue_all)
