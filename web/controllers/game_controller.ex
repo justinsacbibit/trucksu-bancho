@@ -19,7 +19,7 @@ defmodule Game.GameController do
   defp handle_request(conn, body, []) do
     [username, hashed_password | _] = String.split(body, "\n")
 
-    Logger.debug "Received login request for #{username}"
+    Logger.info "Received login request for #{username}"
 
     case Session.authenticate(username, hashed_password, true) do
       {:ok, user} ->
@@ -29,7 +29,7 @@ defmodule Game.GameController do
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
       {:error, _reason} ->
-        Logger.debug "Login failed for #{username}"
+        Logger.info "Login failed for #{username}"
         render prepare_conn(conn), "response.raw", data: Packet.login_failed
     end
   end
@@ -116,6 +116,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(2, data, user) do
+    Logger.info "Handling logout for user: #{inspect user}"
     StateServer.Client.remove_user(user.id)
 
     <<>>
