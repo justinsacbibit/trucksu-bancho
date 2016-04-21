@@ -116,7 +116,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(2, data, user) do
-    Logger.info "Handling logout for user: #{inspect user}"
+    Logger.info "Handling logout for user: #{user.username}"
     StateServer.Client.remove_user(user.id)
 
     <<>>
