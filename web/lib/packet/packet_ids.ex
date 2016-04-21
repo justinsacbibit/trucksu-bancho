@@ -33,8 +33,8 @@ defmodule Game.Packet.Ids do
   def client_createMatch, do: 31
   def client_joinMatch, do: 32
   def client_partMatch, do: 33
-#def erver_lobbyJoin_obsolete, do: = 34
-#def erver_lobbyPart_obsolete, do: = 35
+#def server_lobbyJoin_obsolete, do: 34
+#def server_lobbyPart_obsolete, do: 35
   def server_matchJoinSuccess, do: 36
   def server_matchJoinFail, do: 37
   def client_matchChangeSlot, do: 38

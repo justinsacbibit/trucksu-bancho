@@ -16,3 +16,4 @@ config :trucksu, Trucksu.Repo,
   database: "trucksu_test",
   hostname: "localhost",
   pool: Ecto.Adapters.SQL.Sandbox
+
