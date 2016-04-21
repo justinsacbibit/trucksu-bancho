@@ -126,7 +126,7 @@ defmodule Game.Packet do
     end
 
     user_id = user.id
-    game_mode = action.game_mode
+    game_mode = action[:game_mode]
 
     {stats, game_rank} = Repo.one! from s in UserStats,
       join: s_ in fragment("
@@ -148,11 +148,11 @@ defmodule Game.Packet do
 
     new(Ids.server_userStats, [
       {user.id, :uint32},
-      {action.action_id, :uint8},
-      {action.action_text, :string},
-      {action.action_md5, :string},
-      {action.action_mods, :int32},
-      {action.game_mode, :uint8},
+      {action[:action_id], :uint8},
+      {action[:action_text], :string},
+      {action[:action_md5], :string},
+      {action[:action_mods], :int32},
+      {action[:game_mode], :uint8},
       {0, :int32},
       {stats.ranked_score, :uint64},
       {stats.accuracy, :float},

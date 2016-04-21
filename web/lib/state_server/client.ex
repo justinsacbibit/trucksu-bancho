@@ -17,6 +17,46 @@ defmodule Game.StateServer.Client do
   end
 
   @doc """
+  Removes a user from the state.
+
+  Enqueues a logout packet to all other users, and removes the user from all channels.
+  """
+  def remove_user(server, user_id) do
+    GenServer.cast(server, {:remove_user, user_id})
+  end
+  def remove_user(user_id) do
+    remove_user(@name, user_id)
+  end
+
+  @doc """
+  Adds a user to the specified channel.
+  """
+  def join_channel(server \\ @name, user_id, channel) do
+    GenServer.cast(server, {:join_channel, user_id, channel})
+  end
+
+  @doc """
+  Removes a user from the specified channel.
+  """
+  def part_channel(server \\ @name, user_id, channel) do
+    GenServer.cast(server, {:part_channel, user_id, channel})
+  end
+
+  @doc """
+  Creates a new channel with the specified name. Should start with a #.
+  """
+  def create_channel(server \\ @name, channel) do
+    GenServer.cast(server, {:create_channel, channel})
+  end
+
+  @doc """
+  Sends a public message to a channel.
+  """
+  def send_public_message(server \\ @name, channel, packet, from_user_id) do
+    GenServer.cast(server, {:send_public_message, channel, packet, from_user_id})
+  end
+
+  @doc """
   Gets information about all connected users.
   """
   def users(server) do
@@ -37,13 +77,20 @@ defmodule Game.StateServer.Client do
   end
 
   @doc """
+  Enqueues a packet to be sent to a user, identified by their username.
+  """
+  def enqueue_for_username(server \\ @name, username, packet) do
+    GenServer.cast(server, {:enqueue_for_username, username, packet})
+  end
+
+  @doc """
   Enqueues a packet to be sent to all users.
   """
   def enqueue_all(server, packet) do
     GenServer.cast(server, {:enqueue_all, packet})
   end
   def enqueue_all(packet) do
-    enqueue(@name, packet)
+    enqueue_all(@name, packet)
   end
 
   @doc """
@@ -98,5 +145,12 @@ defmodule Game.StateServer.Client do
   end
   def action(user_id) do
     action(@name, user_id)
+  end
+
+  @doc """
+  Resets the server state.
+  """
+  def reset(server \\ @name) do
+    GenServer.cast(server, :reset)
   end
 end

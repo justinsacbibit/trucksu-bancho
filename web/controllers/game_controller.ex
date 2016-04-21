@@ -2,7 +2,9 @@ defmodule Game.GameController do
   use Game.Web, :controller
   require Logger
   alias Game.{Packet, StateServer}
-  alias Trucksu.{Repo, Session, User}
+  alias Trucksu.{Repo, Session}
+  # Models
+  alias Trucksu.{Beatmap, User}
 
   def index(conn, _params) do
     osu_token = Plug.Conn.get_req_header(conn, "osu-token")
@@ -15,10 +17,9 @@ defmodule Game.GameController do
   end
 
   defp handle_request(conn, body, []) do
-    Logger.debug body
     [username, hashed_password | _] = String.split(body, "\n")
 
-    Logger.warn "Handling login for #{username}"
+    Logger.debug "Received login request for #{username}"
 
     case Session.authenticate(username, hashed_password, true) do
       {:ok, user} ->
@@ -27,7 +28,7 @@ defmodule Game.GameController do
         StateServer.Client.add_user(user, jwt)
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
-      :error ->
+      {:error, _reason} ->
         Logger.debug "Login failed for #{username}"
         render prepare_conn(conn), "response.raw", data: Packet.login_failed
     end
@@ -43,9 +44,22 @@ defmodule Game.GameController do
 
         # TODO: Return an error if the user is somehow not in the state
 
-        data = Packet.Decoder.decode_packets(stacked_packets)
+        decoded_packets = Packet.Decoder.decode_packets(stacked_packets)
+
+        Logger.debug inspect(decoded_packets)
+
+        data = decoded_packets
         |> Enum.reduce(<<>>, fn({packet_id, data}, acc) ->
-          acc <> handle_packet(packet_id, data, user)
+          packet_response = handle_packet(packet_id, data, user)
+
+          if is_nil(packet_response) do
+            Logger.error "nil packet response for #{packet_id}: #{inspect data}"
+            Logger.error "#{inspect user}"
+
+            packet_response = <<>>
+          end
+
+          acc <> packet_response
         end)
 
         packet_queue = StateServer.Client.dequeue(user.id)
@@ -62,30 +76,47 @@ defmodule Game.GameController do
 
   defp handle_packet(0, data, user) do
     Logger.debug "Handling changeAction: data: #{inspect data}, user id: #{user.id}"
-    # TODO: Possibly enqueue user panel as well..
+
+    if data[:action_id] == 2 do
+      # The user has started to play a song
+
+      # Example data
+      # [action_id: 2, action_text: "Kuba Oms - My Love [Insane]", action_md5: "e9d69824c6d6d584bd055b690f71deaf", action_mods: 65, game_mode: 0]
+
+      beatmap_md5 = data[:action_md5]
+      case Repo.get_by(Beatmap, file_md5: beatmap_md5) do
+        nil ->
+          params = %{
+            file_md5: beatmap_md5,
+          }
+          Repo.insert! Beatmap.changeset(%Beatmap{}, params)
+
+        _beatmap ->
+          :ok
+      end
+    end
 
     StateServer.Client.change_action(user.id, data)
 
-    packet = Packet.user_stats(user, data)
-    StateServer.Client.enqueue_all(packet)
+    # TODO: Possibly enqueue user panel as well
+    user_stats_packet = Packet.user_stats(user, data)
+    StateServer.Client.enqueue_all(user_stats_packet)
+
     <<>>
   end
 
   defp handle_packet(1, data, user) do
     channel_name = data[:to]
-    Logger.warn "handling sendPublicMessage for channel #{channel_name}"
+    Logger.debug "handling sendPublicMessage for channel #{channel_name}"
     packet = Packet.send_message(user.username, data[:message], channel_name, user.id)
-    ChannelServer.whereis(channel_name)
-    |> GenServer.cast({:send, packet, user.id})
+
+    StateServer.Client.send_public_message(channel_name, packet, user.id)
 
     <<>>
   end
 
   defp handle_packet(2, data, user) do
-    packet = Packet.logout(user.id)
-    UserServer.Supervisor.enqueue_all(packet)
-
-    ChannelServer.Supervisor.cast_all({:part, user.id})
+    StateServer.Client.remove_user(user.id)
 
     <<>>
   end
@@ -100,37 +131,24 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(25, data, user) do
-    Logger.warn "Handling sendPrivateMessage from #{user.username}, data: #{inspect data}"
+    Logger.debug "Handling sendPrivateMessage from #{user.username}, data: #{inspect data}"
 
-    to = data[:to]
+    to_username = data[:to]
     message = data[:message]
 
-    packet = Packet.send_message(user.username, message, to, user.id)
+    packet = Packet.send_message(user.username, message, to_username, user.id)
 
-    pid = Supervisor.which_children(UserServer.Supervisor)
-    |> Enum.reduce_while(nil, fn({_, pid, _, _}, acc) ->
-      case GenServer.call(pid, :username) do
-        ^to -> {:halt, pid}
-        _ -> {:cont, acc}
-      end
-    end)
+    StateServer.Client.enqueue_for_username(to_username, packet)
 
-    if is_nil(pid) do
-      Logger.error "Unable to find UserServer for #{to} when sending private message"
-    else
-      Logger.warn "Sending private message \"#{message}\" from #{user.username} to #{to}"
-      GenServer.cast(pid, {:enqueue, packet})
-    end
-
+    # TODO: If to_username is not found in the state, inform the client that the user is offline
     <<>>
   end
 
   defp handle_packet(63, data, user) do
     channel_name = data[:channel]
-    Logger.warn "Handling channel join for channel #{channel_name}"
+    Logger.debug "Handling channelJoin for channel #{channel_name}"
 
-    ChannelServer.whereis(channel_name)
-    |> GenServer.cast({:join, user.id})
+    StateServer.Client.join_channel(user.id, channel_name)
 
     Packet.channel_join_success(channel_name)
   end
@@ -143,10 +161,13 @@ defmodule Game.GameController do
 
   # client_channelPart
   defp handle_packet(78, [channel: channel_name], user) do
-    Logger.warn "Handling channel part for channel #{channel_name}"
+    Logger.debug "Handling channel part for channel #{channel_name}"
 
-    ChannelServer.whereis(channel_name)
-    |> GenServer.cast({:part, user.id})
+    # For some reason, osu! client sends a channelPart when a private message
+    # channel is closed
+    if String.starts_with?(channel_name, "#") do
+      StateServer.Client.part_channel(user.id, channel_name)
+    end
 
     <<>>
   end
@@ -183,21 +204,19 @@ defmodule Game.GameController do
   end
 
   defp login_packets(user) do
+    # TODO: Get these from the state server
     channels = ["#osu", "#announce"]
-
-    Enum.each channels, fn channel_name ->
-      ChannelServer.whereis(channel_name)
-      |> GenServer.cast({:join, user.id})
-    end
+    other_channels = []
 
     user_panel_packet = Packet.user_panel(user)
     user_stats_packet = Packet.user_stats(user)
 
-    UserServer.Supervisor.enqueue_all(user_panel_packet)
-    UserServer.Supervisor.enqueue_all(user_stats_packet)
+    StateServer.Client.enqueue_all(user_panel_packet)
+    StateServer.Client.enqueue_all(user_stats_packet)
 
-    online_users = Supervisor.which_children(UserServer.Supervisor)
-    |> Enum.map(fn({user_id, _pid, _, _}) ->
+    online_users = StateServer.Client.users()
+    |> Map.keys
+    |> Enum.map(fn(user_id) ->
       Repo.get! User, user_id
     end)
 
@@ -212,6 +231,7 @@ defmodule Game.GameController do
     <> Packet.channel_info_end
     <> Enum.reduce(channels, <<>>, &(&2 <> Packet.channel_join_success(&1)))
     <> Enum.reduce(channels, <<>>, &(&2 <> Packet.channel_info(&1)))
+    <> Enum.reduce(other_channels, <<>>, &(&2 <> Packet.channel_info(&1)))
     # TODO: Dynamically add channel info
     <> Packet.friends_list(user)
     # TODO: Menu icon
