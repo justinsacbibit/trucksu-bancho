@@ -183,7 +183,8 @@ defmodule Game.GameController do
         user ->
           Packet.user_stats(user)
       end
-
+    else
+      <<>>
     end
   end
 
