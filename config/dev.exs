@@ -30,3 +30,12 @@ password: "postgres_db",
 database: "trucksu_dev",
 hostname: "localhost",
 pool_size: 10
+
+config :exredis,
+  host: "127.0.0.1",
+  port: 6379,
+  password: "",
+  db: 0,
+  reconnect: :no_reconnect,
+  max_queue: :infinity
+

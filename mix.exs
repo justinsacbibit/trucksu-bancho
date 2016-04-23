@@ -31,6 +31,7 @@ defmodule Game.Mixfile do
     [{:phoenix, "~> 1.1.4"},
      {:gettext, "~> 0.9"},
      {:cowboy, "~> 1.0"},
+     {:exredis, ">= 0.2.4"},
      {:trucksu, path: "./trucksu-web"}]
   end
 end

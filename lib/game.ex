@@ -12,13 +12,17 @@ defmodule Game do
       # Here you could define other workers and supervisors as children
       supervisor(Trucksu.Repo, []),
       # worker(Game.Worker, [arg1, arg2, arg3]),
-      worker(Game.StateServer, [Game.StateServer]),
+      worker(Game.Redis, [:redis]),
     ]
 
     # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Game.Supervisor]
-    Supervisor.start_link(children, opts)
+    ret = Supervisor.start_link(children, opts)
+
+    Game.StateServer.Client.initialize
+
+    ret
   end
 
   # Tell Phoenix to update the endpoint configuration

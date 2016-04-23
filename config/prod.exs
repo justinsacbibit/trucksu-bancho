@@ -24,6 +24,11 @@ config :trucksu, Trucksu.Repo,
   url: System.get_env("DATABASE_URL"),
   pool_size: 20
 
+config :exredis,
+  url: System.get_env("REDIS_URL"),
+  reconnect: :no_reconnect,
+  max_queue: :infinity
+
 config :guardian, Guardian,
   issuer: "Trucksu",
   ttl: { 60, :days },

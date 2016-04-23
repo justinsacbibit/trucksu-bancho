@@ -16,8 +16,10 @@ config :game, Game.Endpoint,
 
 # Configures Elixir's Logger
 config :logger, :console,
-  format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  # format: "$time $metadata[$level] $message\n",
+  format: "$metadata[$level] $message\n",
+  metadata: [],
+  level: :warn
 
 config :guardian, Guardian,
   issuer: "Trucksu",

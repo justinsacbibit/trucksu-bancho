@@ -88,7 +88,7 @@ defmodule Game.Packet do
   end
 
   def online_users do
-    user_ids = StateServer.Client.users() |> Map.keys()
+    user_ids = StateServer.Client.user_ids()
 
     data = [{length(user_ids), :int16}]
 

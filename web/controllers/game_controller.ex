@@ -19,7 +19,7 @@ defmodule Game.GameController do
   defp handle_request(conn, body, []) do
     [username, hashed_password | _] = String.split(body, "\n")
 
-    Logger.info "Received login request for #{username}"
+    Logger.warn "Received login request for #{username}"
 
     case Session.authenticate(username, hashed_password, true) do
       {:ok, user} ->
@@ -28,8 +28,8 @@ defmodule Game.GameController do
         StateServer.Client.add_user(user, jwt)
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
-      {:error, _reason} ->
-        Logger.info "Login failed for #{username}"
+      {:error, reason} ->
+        Logger.warn IO.ANSI.red <> "Login failed for #{username}. Reason: #{reason}" <> IO.ANSI.reset
         render prepare_conn(conn), "response.raw", data: Packet.login_failed
     end
   end
@@ -75,7 +75,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(0, data, user) do
-    Logger.debug "Handling changeAction: data: #{inspect data}, user id: #{user.id}"
+    Logger.warn "Handling changeAction: data: #{inspect data}, user id: #{user.id}"
 
     if data[:action_id] == 2 do
       # The user has started to play a song
@@ -107,7 +107,7 @@ defmodule Game.GameController do
 
   defp handle_packet(1, data, user) do
     channel_name = data[:to]
-    Logger.debug "handling sendPublicMessage for channel #{channel_name}"
+    Logger.warn "handling sendPublicMessage for channel #{channel_name}"
     packet = Packet.send_message(user.username, data[:message], channel_name, user.id)
 
     StateServer.Client.send_public_message(channel_name, packet, user.id)
@@ -116,14 +116,14 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(2, data, user) do
-    Logger.info "Handling logout for user: #{user.username}"
+    Logger.warn "Handling logout for user: #{user.username}"
     StateServer.Client.remove_user(user.id)
 
     <<>>
   end
 
   defp handle_packet(3, data, user) do
-    Logger.debug "Unhandled requestStatusUpdate"
+    Logger.warn "Unhandled requestStatusUpdate"
     <<>>
   end
 
@@ -147,7 +147,7 @@ defmodule Game.GameController do
 
   defp handle_packet(63, data, user) do
     channel_name = data[:channel]
-    Logger.debug "Handling channelJoin for channel #{channel_name}"
+    Logger.warn "Handling channelJoin for channel #{channel_name}"
 
     StateServer.Client.join_channel(user.id, channel_name)
 
@@ -162,7 +162,7 @@ defmodule Game.GameController do
 
   # client_channelPart
   defp handle_packet(78, [channel: channel_name], user) do
-    Logger.debug "Handling channel part for channel #{channel_name}"
+    Logger.warn "Handling channel part for channel #{channel_name}"
 
     # For some reason, osu! client sends a channelPart when a private message
     # channel is closed
@@ -216,8 +216,7 @@ defmodule Game.GameController do
     StateServer.Client.enqueue_all(user_panel_packet)
     StateServer.Client.enqueue_all(user_stats_packet)
 
-    online_users = StateServer.Client.users()
-    |> Map.keys
+    online_users = StateServer.Client.user_ids()
     |> Enum.map(fn(user_id) ->
       Repo.get! User, user_id
     end)
