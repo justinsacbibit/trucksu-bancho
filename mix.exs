@@ -17,7 +17,7 @@ defmodule Game.Mixfile do
   # Type `mix help compile.app` for more information.
   def application do
     [mod: {Game, []},
-     applications: [:phoenix, :cowboy, :logger, :gettext]]
+     applications: [:phoenix, :cowboy, :logger, :gettext, :timex]]
   end
 
   # Specifies which paths to compile per environment.
@@ -32,6 +32,7 @@ defmodule Game.Mixfile do
      {:gettext, "~> 0.9"},
      {:cowboy, "~> 1.0"},
      {:exredis, ">= 0.2.4"},
+     {:timex, "2.1.4"},
      {:trucksu, path: "./trucksu-web"}]
   end
 end

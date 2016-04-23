@@ -43,6 +43,8 @@ defmodule Game.GameController do
         #       and the packet queue is empty
         {:ok, user} = Guardian.serializer.from_token(claims["sub"])
 
+        StateServer.Client.update_last_request_time(user.id)
+
         # TODO: Return an error if the user is somehow not in the state
 
         decoded_packets = Packet.Decoder.decode_packets(stacked_packets)
@@ -159,8 +161,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(68, data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!beatmapInfoRequest"
-    Logger.warn inspect data
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!beatmapInfoRequest: #{inspect data}"
     <<>>
   end
 

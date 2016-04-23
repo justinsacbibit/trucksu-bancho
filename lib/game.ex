@@ -13,6 +13,7 @@ defmodule Game do
       supervisor(Trucksu.Repo, []),
       # worker(Game.Worker, [arg1, arg2, arg3]),
       worker(Game.Redis, [:redis]),
+      worker(Game.UserTimeout, []),
     ]
 
     # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html

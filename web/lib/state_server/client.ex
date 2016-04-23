@@ -3,9 +3,11 @@ defmodule Game.StateServer.Client do
   The client API for the StateServer.
   """
   require Logger
+  use Timex
   alias Game.{Packet, Utils}
 
   @client :redis
+  @client_sub :redis_sub
   @default_channels ["#osu", "#announce"]
   @other_channels []
 
@@ -29,6 +31,39 @@ defmodule Game.StateServer.Client do
   end
 
   @doc """
+  Updates the time of the user's last request to now. Used to check if a client
+  has been disconnected for an extended period of time.
+  """
+  def update_last_request_time(user_id) do
+    {time0, time1, time2} = Time.now
+    @client |> Exredis.query([
+      "HMSET",
+      user_key(user_id),
+      "last_request_time0", time0,
+      "last_request_time1", time1,
+      "last_request_time2", time2,
+    ])
+  end
+
+  @doc """
+  """
+  def retrieve_last_request_time(user_id) do
+    [time0, time1, time2] = @client |> Exredis.query([
+      "HMGET",
+      user_key(user_id),
+      "last_request_time0",
+      "last_request_time1",
+      "last_request_time2",
+    ])
+
+    {time0, _} = Integer.parse(time0)
+    {time1, _} = Integer.parse(time1)
+    {time2, _} = Integer.parse(time2)
+
+    {time0, time1, time2}
+  end
+
+  @doc """
   After a user has been authenticated, add them into the global state. Joins the
   user into the default channels (#osu, #announce).
 
@@ -36,6 +71,8 @@ defmodule Game.StateServer.Client do
   """
   def add_user(user, token) do
     remove_user_from_channels(user.id)
+
+    {time0, time1, time2} = Time.now
 
     query1 = [
       "HMSET",
@@ -47,6 +84,9 @@ defmodule Game.StateServer.Client do
       "action_md5", "",
       "action_mods", 0,
       "game_mode", 0,
+      "last_request_time0", time0,
+      "last_request_time1", time1,
+      "last_request_time2", time2,
     ]
 
     query2 = ["HSET", "users", user.username, user.id]
@@ -122,6 +162,13 @@ defmodule Game.StateServer.Client do
   """
   def users() do
     raise "StateServer.Client.users not implemented yet"
+  end
+
+  @doc """
+  Gets the username of the user with the given user id.
+  """
+  def username(user_id) do
+    @client |> Exredis.query(["HGET", user_key(user_id), "username"])
   end
 
   @doc """
