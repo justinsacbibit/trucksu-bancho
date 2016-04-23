@@ -108,7 +108,7 @@ defmodule Game.GameController do
 
   defp handle_packet(1, data, user) do
     channel_name = data[:to]
-    Logger.warn "sendPublicMessage #{Utils.color(channel_name, IO.ANSI.green)} #{Utils.color(user.username, IO.ANSI.blue)}: #{data[:message]}"
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)} to #{Utils.color(channel_name, IO.ANSI.green)}: #{data[:message]}"
     packet = Packet.send_message(user.username, data[:message], channel_name, user.id)
 
     StateServer.Client.send_public_message(channel_name, packet, user.id)
@@ -123,9 +123,12 @@ defmodule Game.GameController do
     <<>>
   end
 
-  defp handle_packet(3, _data, _user) do
-    Logger.warn "Unhandled requestStatusUpdate"
-    <<>>
+  defp handle_packet(3, _data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!requestStatusUpdate"
+    user_panel_packet = Packet.user_panel(user)
+    user_stats_packet = Packet.user_stats(user)
+
+    user_panel_packet <> user_stats_packet
   end
 
   defp handle_packet(4, _data, _user) do
@@ -133,7 +136,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(25, data, user) do
-    Logger.debug "Handling sendPrivateMessage from #{user.username}, data: #{inspect data}"
+    Logger.debug "#{Utils.color(user.username, IO.ANSI.blue)} to #{Utils.color(data[:to], IO.ANSI.red)}: #{data[:message]}"
 
     to_username = data[:to]
     message = data[:message]
@@ -148,22 +151,22 @@ defmodule Game.GameController do
 
   defp handle_packet(63, data, user) do
     channel_name = data[:channel]
-    Logger.warn "Handling channelJoin for channel #{channel_name}"
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!channelJoin - #{channel_name}"
 
     StateServer.Client.join_channel(user.id, channel_name)
 
     Packet.channel_join_success(channel_name)
   end
 
-  defp handle_packet(68, data, _user) do
-    Logger.warn "Unhandled beatmapInfoRequest"
+  defp handle_packet(68, data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!beatmapInfoRequest"
     Logger.warn inspect data
     <<>>
   end
 
   # client_channelPart
   defp handle_packet(78, [channel: channel_name], user) do
-    Logger.warn "Handling channel part for channel #{channel_name}"
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!channelPart - #{channel_name}"
 
     # For some reason, osu! client sends a channelPart when a private message
     # channel is closed
@@ -191,7 +194,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(packet_id, data, user) do
-    Logger.warn "Unhandled packet #{packet_id} from " <> IO.ANSI.blue <> user.username <> IO.ANSI.reset
+    Logger.warn "Unhandled packet #{packet_id} from #{Utils.color(user.username, IO.ANSI.blue)}"
     Logger.warn inspect data
     <<>>
   end
@@ -237,7 +240,6 @@ defmodule Game.GameController do
     # TODO: Dynamically add channel info
     <> Packet.friends_list(user)
     # TODO: Menu icon
-    <> Packet.notification("Welcome to the UW Meme Server!")
     <> Enum.reduce(online_users, <<>>, &(&2 <> Packet.user_panel(&1)))
     <> Enum.reduce(online_users, <<>>, &(&2 <> Packet.user_stats(&1)))
     <> Packet.online_users
