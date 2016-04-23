@@ -3,7 +3,7 @@ defmodule Game.StateServer.Client do
   The client API for the StateServer.
   """
   require Logger
-  alias Game.Packet
+  alias Game.{Packet, Utils}
 
   @client :redis
   @default_channels ["#osu", "#announce"]
@@ -14,15 +14,7 @@ defmodule Game.StateServer.Client do
   OTP application callback.
   """
   def initialize() do
-    #channels = @default_channels ++ @other_channels
-    #num = @client |> Exredis.query(["SADD", "channels" | channels])
-
-    #case Integer.parse(num) do
-      #:error ->
-        #reset()
-      #_ ->
-        Logger.warn IO.ANSI.green <> "Initialized Redis state" <> IO.ANSI.reset
-    #end
+    Logger.warn Utils.color("Initialized Redis state", IO.ANSI.green)
   end
 
   @doc """

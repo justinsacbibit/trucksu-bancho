@@ -5,6 +5,7 @@ defmodule Game.GameController do
   alias Trucksu.{Repo, Session}
   # Models
   alias Trucksu.{Beatmap, User}
+  alias Game.Utils
 
   def index(conn, _params) do
     osu_token = Plug.Conn.get_req_header(conn, "osu-token")
@@ -29,7 +30,7 @@ defmodule Game.GameController do
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
       {:error, reason} ->
-        Logger.warn IO.ANSI.red <> "Login failed for #{username}. Reason: #{reason}" <> IO.ANSI.reset
+        Logger.warn Utils.color("Login failed for #{username}. Reason: #{reason}", IO.ANSI.red)
         render prepare_conn(conn), "response.raw", data: Packet.login_failed
     end
   end
@@ -75,7 +76,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(0, data, user) do
-    Logger.warn "Handling changeAction: data: #{inspect data}, user id: #{user.id}"
+    Logger.warn "changeAction for #{Utils.color(user.username, IO.ANSI.blue)}: #{inspect Enum.map(data, &(elem(&1, 1)))}"
 
     if data[:action_id] == 2 do
       # The user has started to play a song
@@ -107,7 +108,7 @@ defmodule Game.GameController do
 
   defp handle_packet(1, data, user) do
     channel_name = data[:to]
-    Logger.warn "handling sendPublicMessage for channel #{channel_name}"
+    Logger.warn "sendPublicMessage #{Utils.color(channel_name, IO.ANSI.green)} #{Utils.color(user.username, IO.ANSI.blue)}: #{data[:message]}"
     packet = Packet.send_message(user.username, data[:message], channel_name, user.id)
 
     StateServer.Client.send_public_message(channel_name, packet, user.id)
@@ -115,14 +116,14 @@ defmodule Game.GameController do
     <<>>
   end
 
-  defp handle_packet(2, data, user) do
-    Logger.warn "Handling logout for user: #{user.username}"
+  defp handle_packet(2, _data, user) do
+    Logger.warn "Handling logout for #{Utils.color(user.username, IO.ANSI.blue)}"
     StateServer.Client.remove_user(user.id)
 
     <<>>
   end
 
-  defp handle_packet(3, data, user) do
+  defp handle_packet(3, _data, _user) do
     Logger.warn "Unhandled requestStatusUpdate"
     <<>>
   end
@@ -154,7 +155,7 @@ defmodule Game.GameController do
     Packet.channel_join_success(channel_name)
   end
 
-  defp handle_packet(68, data, user) do
+  defp handle_packet(68, data, _user) do
     Logger.warn "Unhandled beatmapInfoRequest"
     Logger.warn inspect data
     <<>>
@@ -173,7 +174,7 @@ defmodule Game.GameController do
     <<>>
   end
 
-  defp handle_packet(85, data, user) do
+  defp handle_packet(85, data, _user) do
     # userStatsRequest
 
     # No idea why the integer is coming out unsigned, this is -1 in signed 32 bit
@@ -190,7 +191,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(packet_id, data, user) do
-    Logger.warn "Unhandled packet #{packet_id}"
+    Logger.warn "Unhandled packet #{packet_id} from " <> IO.ANSI.blue <> user.username <> IO.ANSI.reset
     Logger.warn inspect data
     <<>>
   end
