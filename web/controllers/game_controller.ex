@@ -138,7 +138,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(25, data, user) do
-    Logger.debug "#{Utils.color(user.username, IO.ANSI.blue)} to #{Utils.color(data[:to], IO.ANSI.red)}: #{data[:message]}"
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)} to #{Utils.color(data[:to], IO.ANSI.red)}: #{data[:message]}"
 
     to_username = data[:to]
     message = data[:message]
@@ -148,6 +148,24 @@ defmodule Game.GameController do
     StateServer.Client.enqueue_for_username(to_username, packet)
 
     # TODO: If to_username is not found in the state, inform the client that the user is offline
+    <<>>
+  end
+
+  defp handle_packet(29, _data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!partLobby"
+
+    <<>>
+  end
+
+  defp handle_packet(30, _data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!joinLobby"
+
+    <<>>
+  end
+
+  defp handle_packet(31, data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!createMatch: #{inspect data}"
+
     <<>>
   end
 
@@ -195,8 +213,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(packet_id, data, user) do
-    Logger.warn "Unhandled packet #{packet_id} from #{Utils.color(user.username, IO.ANSI.blue)}"
-    Logger.warn inspect data
+    Logger.warn "Unhandled packet #{packet_id} from #{Utils.color(user.username, IO.ANSI.blue)}: #{inspect data}"
     <<>>
   end
 
