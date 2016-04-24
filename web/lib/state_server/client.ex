@@ -203,10 +203,10 @@ defmodule Game.StateServer.Client do
   Enqueues a packet to be sent to all users.
   """
   def enqueue_all(packet) do
-    queues = @client |> Exredis.query(["KEYS", user_queue_key("*")])
+    user_keys = @client |> Exredis.query(["KEYS", user_key("*")])
 
-    queries = Enum.map queues, fn queue ->
-      ["RPUSH", queue, packet]
+    queries = Enum.map user_keys, fn "user:" <> user_id ->
+      ["RPUSH", user_queue_key(user_id), packet]
     end
 
     @client |> Exredis.query_pipe(queries)
