@@ -282,17 +282,27 @@ defmodule Game.StateServer.Client do
     ])
     [action_id, action_text, action_md5, action_mods, game_mode] = list
 
-    {action_id, _} = Integer.parse(action_id)
-    {action_mods, _} = Integer.parse(action_mods)
-    {game_mode, _} = Integer.parse(game_mode)
-
-    [
-      action_id: action_id,
-      action_text: action_text,
-      action_md5: action_md5,
-      action_mods: action_mods,
-      game_mode: game_mode,
-    ]
+    case action_id do
+      :undefined ->
+        [
+          "action_id", 0,
+          "action_text", "",
+          "action_md5", "",
+          "action_mods", 0,
+          "game_mode", 0,
+        ]
+      _ ->
+        {action_id, _} = Integer.parse(action_id)
+        {action_mods, _} = Integer.parse(action_mods)
+        {game_mode, _} = Integer.parse(game_mode)
+        [
+          action_id: action_id,
+          action_text: action_text,
+          action_md5: action_md5,
+          action_mods: action_mods,
+          game_mode: game_mode,
+        ]
+    end
   end
 
   ## Helper functions
