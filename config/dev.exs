@@ -24,12 +24,12 @@ config :game, Game.Endpoint,
 config :phoenix, :stacktrace_depth, 20
 
 config :trucksu, Trucksu.Repo,
-adapter: Ecto.Adapters.Postgres,
-username: "postgres_db",
-password: "postgres_db",
-database: "trucksu_dev",
-hostname: "localhost",
-pool_size: 10
+  adapter: Ecto.Adapters.Postgres,
+  username: "postgres_db",
+  password: "postgres_db",
+  database: "trucksu_dev",
+  hostname: "localhost",
+  pool_size: 10
 
 config :exredis,
   host: "127.0.0.1",
