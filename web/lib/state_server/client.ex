@@ -107,14 +107,15 @@ defmodule Game.StateServer.Client do
   def remove_user(user_id) do
     logout_packet = Packet.logout(user_id)
 
-    [username, spectating] = @client |> Exredis.query(["HMGET", user_key(user_id), "username", "spectating"])
+    username = @client |> Exredis.query(["HGET", user_key(user_id), "username"])
 
     @client |> Exredis.query_pipe([
       ["DEL", user_key(user_id)],
       ["HDEL", "users", username],
       ["DEL", user_queue_key(user_id)],
-      ["SREM", "user.spectators:#{spectating}", user_id],
     ])
+
+    stop_spectating(user_id)
 
     enqueue_all(logout_packet)
 
