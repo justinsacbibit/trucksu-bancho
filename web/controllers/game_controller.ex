@@ -137,6 +137,39 @@ defmodule Game.GameController do
     <<>>
   end
 
+  defp handle_packet(16, data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!startSpectating"
+
+    host_id = data[:user_id]
+    StateServer.Client.spectate(user.id, host_id)
+
+    <<>>
+  end
+
+  defp handle_packet(17, _data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!stopSpectating"
+
+    StateServer.Client.stop_spectating(user.id)
+
+    <<>>
+  end
+
+  defp handle_packet(18, data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!spectateFrames"
+
+    StateServer.Client.spectate_frames(user.id, data[:data])
+
+    <<>>
+  end
+
+  defp handle_packet(21, _data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!cantSpectate"
+
+    StateServer.Client.cant_spectate(user.id)
+
+    <<>>
+  end
+
   defp handle_packet(25, data, user) do
     Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)} to #{Utils.color(data[:to], IO.ANSI.red)}: #{data[:message]}"
 

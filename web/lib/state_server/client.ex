@@ -7,7 +7,6 @@ defmodule Game.StateServer.Client do
   alias Game.{Packet, Utils}
 
   @client :redis
-  @client_sub :redis_sub
   @default_channels ["#osu", "#announce"]
   @other_channels []
 
@@ -108,12 +107,13 @@ defmodule Game.StateServer.Client do
   def remove_user(user_id) do
     logout_packet = Packet.logout(user_id)
 
-    username = @client |> Exredis.query(["HGET", user_key(user_id), "username"])
+    [username, spectating] = @client |> Exredis.query(["HMGET", user_key(user_id), "username", "spectating"])
 
     @client |> Exredis.query_pipe([
       ["DEL", user_key(user_id)],
       ["HDEL", "users", username],
       ["DEL", user_queue_key(user_id)],
+      ["SREM", "user.spectators:#{spectating}", user_id],
     ])
 
     enqueue_all(logout_packet)
@@ -169,6 +169,13 @@ defmodule Game.StateServer.Client do
   """
   def username(user_id) do
     @client |> Exredis.query(["HGET", user_key(user_id), "username"])
+  end
+
+  @doc """
+  Checks if the user with the given id is connected.
+  """
+  def is_connected(user_id) do
+    @client |> Exredis.query(["EXISTS", user_key(user_id)])
   end
 
   @doc """
@@ -258,6 +265,96 @@ defmodule Game.StateServer.Client do
     ]
 
     @client |> Exredis.query(query)
+  end
+
+  @doc """
+  Begin spectating a user.
+  """
+  def spectate(spectator_id, spectatee_id) do
+    current_spectatee_id = @client |> Exredis.query(["HGET", "user:#{spectator_id}", "spectating"])
+
+    # If the spectator is watching someone, remove them from that someone's list of spectators
+    if not is_nil(current_spectatee_id) do
+      @client |> Exredis.query(["SREM", "user.spectators:#{current_spectatee_id}", spectator_id])
+
+      enqueue(current_spectatee_id, Packet.remove_spectator(spectator_id))
+    end
+
+    if is_connected(spectatee_id) do
+
+      # TODO: Pipeline Redis queries
+
+      @client |> Exredis.query_pipe([
+        # Set who the spectator is spectating
+        ["HSET", "user:#{spectator_id}", "spectating", spectatee_id],
+        # Add the spectator to the host's list of spectators
+        ["SADD", "user.spectators:#{spectatee_id}", spectator_id],
+      ])
+
+      # Send spectator join packet to host
+      enqueue(spectatee_id, Packet.add_spectator(spectator_id))
+
+      # Join #spectator channel
+      enqueue(spectator_id, Packet.channel_join_success("#spectator"))
+
+      num_spectators = @client |> Exredis.query(["SCARD", "user.spectators:#{spectatee_id}"])
+      {num_spectators, _} = Integer.parse(num_spectators)
+
+      if num_spectators == 1 do
+        # First spectator, send #spectator join to host too
+        enqueue(spectatee_id, Packet.channel_join_success("#spectator"))
+      end
+    end
+  end
+
+  @doc """
+  Spectate frame event.
+  """
+  def spectate_frames(host_id, data) do
+    spectator_ids = @client |> Exredis.query(["SMEMBERS", "user.spectators:#{host_id}"])
+
+    Enum.map(spectator_ids, fn spectator_id ->
+      {spectator_id, _} = Integer.parse(spectator_id)
+      spectator_id
+    end)
+    |> Enum.each(fn spectator_id ->
+      if spectator_id == host_id do
+        Logger.error "Yes, spectator_id can equal host_id"
+      else
+        # TODO: Pipeline Redis queries
+        enqueue(spectator_id, data)
+      end
+    end)
+  end
+
+  @doc """
+  Stop spectating.
+  """
+  def stop_spectating(spectator_id) do
+    current_spectatee_id = @client |> Exredis.query(["HGET", "user:#{spectator_id}", "spectating"])
+
+    # If the spectator is watching someone, remove them from that someone's list of spectators
+    if not is_nil(current_spectatee_id) do
+      @client |> Exredis.query_pipe([
+        # Remove ourselves from the set of spectators
+        ["SREM", "user.spectators:#{current_spectatee_id}", spectator_id],
+        # Set who we're spectating to nil
+        ["HDEL", "user:#{spectator_id}", "spectating"],
+      ])
+
+      enqueue(current_spectatee_id, Packet.remove_spectator(spectator_id))
+    end
+  end
+
+  @doc """
+  Can't spectate.
+  """
+  def cant_spectate(spectator_id) do
+    current_spectatee_id = @client |> Exredis.query(["HGET", "user:#{spectator_id}", "spectating"])
+    # If the spectator is watching someone
+    if not is_nil(current_spectatee_id) do
+      enqueue(current_spectatee_id, Packet.no_song_spectator(spectator_id))
+    end
   end
 
   @doc """

@@ -24,6 +24,7 @@ defmodule Game.Packet do
   defp pack(data, :int16), do: pack_num(data, 16, true)
   defp pack(data, :int8), do: pack_num(data, 8, true)
   defp pack(data, :float), do: pack_num(data)
+  defp pack(data, :bytes), do: data
   defp pack("", :string) do
     <<0>>
   end
@@ -219,5 +220,23 @@ defmodule Game.Packet do
 
   def jumpscare(message) do
     new(Ids.server_jumpscare, [{message, :string}])
+  end
+
+  ## Spectator packets
+
+  def add_spectator(user_id) do
+    new(Ids.server_spectatorJoined, [{user_id, :int32}])
+  end
+
+  def remove_spectator(user_id) do
+    new(Ids.server_spectatorLeft, [{user_id, :int32}])
+  end
+
+  def spectator_frames(data) do
+    new(Ids.server_spectateFrames, [{data, :bytes}])
+  end
+
+  def no_song_spectator(user_id) do
+    new(Ids.server_spectatorCantSpectate, [{user_id, :int32}])
   end
 end
