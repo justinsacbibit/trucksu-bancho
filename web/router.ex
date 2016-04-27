@@ -13,4 +13,10 @@ defmodule Game.Router do
     get "/", PageController, :index
     post "/", GameController, :index
   end
+
+  scope "/event", Game do
+    pipe_through :api
+
+    post "/", EventController, :index
+  end
 end
