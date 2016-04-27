@@ -218,8 +218,11 @@ defmodule Game.GameController do
   end
 
   defp prepare_conn(conn, cho_token \\ "") do
+    if cho_token != "" do
+      conn = conn
+      |> Plug.Conn.put_resp_header("cho-token", cho_token)
+    end
     conn
-    |> Plug.Conn.put_resp_header("cho-token", cho_token)
     |> Plug.Conn.put_resp_header("cho-protocol", "19")
     |> Plug.Conn.put_resp_header("Keep-Alive", "timeout=5, max=100")
     |> Plug.Conn.put_resp_header("Connection", "keep-alive")

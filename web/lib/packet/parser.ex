@@ -87,6 +87,7 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(78, data), do: channel_part(data)
   defp decode_packet(79, _), do: [] # receiveUpdates
   defp decode_packet(85, data), do: user_stats_request(data)
+  defp decode_packet(_, _), do: [] # TODO: Remove
 
   @doc """
   Decodes the given `stacked_packets` binary.
