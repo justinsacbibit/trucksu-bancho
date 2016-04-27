@@ -128,7 +128,7 @@ defmodule Game.Packet do
     user_id = user.id
     game_mode = action[:game_mode]
 
-    {stats, game_rank} = Repo.one! from s in UserStats,
+    case Repo.one from s in UserStats,
       join: s_ in fragment("
         SELECT game_rank, id
         FROM
@@ -144,23 +144,26 @@ defmodule Game.Packet do
         WHERE user_id = (?)
       ", ^game_mode, ^user_id),
         on: s.id == s_.id,
-      select: {s, s_.game_rank}
-
-    new(Ids.server_userStats, [
-      {user.id, :uint32},
-      {action[:action_id], :uint8},
-      {action[:action_text], :string},
-      {action[:action_md5], :string},
-      {action[:action_mods], :int32},
-      {action[:game_mode], :uint8},
-      {0, :int32},
-      {stats.ranked_score, :uint64},
-      {stats.accuracy, :float},
-      {stats.playcount, :uint32},
-      {stats.total_score, :uint64},
-      {game_rank, :uint32},
-      {round(stats.pp), :uint16},
-    ])
+      select: {s, s_.game_rank} do
+        nil ->
+          <<>>
+        {stats, game_rank} ->
+          new(Ids.server_userStats, [
+            {user.id, :uint32},
+            {action[:action_id], :uint8},
+            {action[:action_text], :string},
+            {action[:action_md5], :string},
+            {action[:action_mods], :int32},
+            {action[:game_mode], :uint8},
+            {0, :int32},
+            {stats.ranked_score, :uint64},
+            {stats.accuracy, :float},
+            {stats.playcount, :uint32},
+            {stats.total_score, :uint64},
+            {game_rank, :uint32},
+            {round(stats.pp), :uint16},
+          ])
+    end
   end
 
   @channels %{
