@@ -323,7 +323,7 @@ defmodule Game.StateServer.Client do
         Logger.error "Yes, spectator_id can equal host_id"
       else
         # TODO: Pipeline Redis queries
-        Logger.warn "Enqueuing spectate frames from #{host_id} to #{spectator_id}"
+        Logger.warn "Enqueuing spectate frames from #{host_id} to #{spectator_id}: #{inspect data}"
         enqueue(spectator_id, data)
       end
     end)
