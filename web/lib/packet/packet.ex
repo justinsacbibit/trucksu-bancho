@@ -97,45 +97,47 @@ defmodule Game.Packet do
     new(Ids.server_userPresenceBundle, data)
   end
 
-  def user_panel(user) do
+  def user_panel(user, action \\ nil) do
     # TODO: Set actual data
     timezone = 24
     country = 1
     user_rank = 0 # normal
     longitude = 1.1
     latitude = 1.1
-    game_rank = 2289
 
-    new(Ids.server_userPanel, [
-      {user.id, :uint32},
-      {user.username, :string},
-      {timezone, :uint8},
-      {country, :uint8},
-      {user_rank, :uint8},
-      {longitude, :float},
-      {latitude, :float},
-      {game_rank, :uint32},
-    ])
-  end
-
-  def user_stats(user, action \\ nil) do
-    action = if is_nil(action) do
-      StateServer.Client.action(user.id)
-    else
-      action
+    if is_nil(action) do
+      action = StateServer.Client.action(user.id)
     end
 
     user_id = user.id
     game_mode = action[:game_mode]
 
-    case Repo.one from s in UserStats,
+    case stats_and_rank(user_id, game_mode) do
+        nil ->
+          <<>>
+        {_stats, game_rank} ->
+          new(Ids.server_userPanel, [
+            {user.id, :uint32},
+            {user.username, :string},
+            {timezone, :uint8},
+            {country, :uint8},
+            {user_rank, :uint8},
+            {longitude, :float},
+            {latitude, :float},
+            {game_rank, :uint32},
+          ])
+    end
+  end
+
+  defp stats_and_rank(user_id, game_mode) do
+    Repo.one from s in UserStats,
       join: s_ in fragment("
         SELECT game_rank, id
         FROM
           (SELECT
              row_number()
              OVER (
-               ORDER BY ranked_score DESC) game_rank,
+               ORDER BY pp DESC) game_rank,
              user_id, id
            FROM
              (SELECT * FROM user_stats us
@@ -144,7 +146,18 @@ defmodule Game.Packet do
         WHERE user_id = (?)
       ", ^game_mode, ^user_id),
         on: s.id == s_.id,
-      select: {s, s_.game_rank} do
+      select: {s, s_.game_rank}
+  end
+
+  def user_stats(user, action \\ nil) do
+    if is_nil(action) do
+      action = StateServer.Client.action(user.id)
+    end
+
+    user_id = user.id
+    game_mode = action[:game_mode]
+
+    case stats_and_rank(user_id, game_mode) do
         nil ->
           <<>>
         {stats, game_rank} ->

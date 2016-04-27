@@ -235,8 +235,10 @@ defmodule Game.GameController do
     channels = ["#osu", "#announce"]
     other_channels = []
 
-    user_panel_packet = Packet.user_panel(user)
-    user_stats_packet = Packet.user_stats(user)
+    action = StateServer.Client.action(user.id)
+
+    user_panel_packet = Packet.user_panel(user, action)
+    user_stats_packet = Packet.user_stats(user, action)
 
     StateServer.Client.enqueue_all(user_panel_packet)
     StateServer.Client.enqueue_all(user_stats_packet)
