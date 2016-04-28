@@ -99,12 +99,11 @@ defmodule Game.Packet do
   end
 
   def user_panel(user, action \\ nil) do
-    # TODO: Set actual data
+    {[latitude, longitude], country_id} = StateServer.Client.user_location(user.id)
+
+    # TODO: timezone
     timezone = 24
-    country = 1
     user_rank = 0 # normal
-    longitude = 1.1
-    latitude = 1.1
 
     if is_nil(action) do
       action = StateServer.Client.action(user.id)
@@ -121,7 +120,7 @@ defmodule Game.Packet do
             {user.id, :uint32},
             {user.username, :string},
             {timezone, :uint8},
-            {country, :uint8},
+            {country_id, :uint8},
             {user_rank, :uint8},
             {longitude, :float},
             {latitude, :float},

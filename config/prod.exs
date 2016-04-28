@@ -36,7 +36,8 @@ config :guardian, Guardian,
   serializer: Trucksu.GuardianSerializer,
   secret_key: System.get_env("GUARDIAN_SECRET_KEY")
 
-config :game, server_cookie: System.get_env("SERVER_COOKIE")
+config :game,
+  server_cookie: System.get_env("SERVER_COOKIE")
 
 # ## SSL Support
 #

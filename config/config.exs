@@ -28,7 +28,9 @@ config :guardian, Guardian,
   serializer: Trucksu.GuardianSerializer,
   secret_key: System.get_env("GUARDIAN_SECRET_KEY") || "e2z2aq3mz7GAiStke74ROQ13+nqNmNvXf6EuZNIsK8a8w00VOTLmEpGRBtdKhb5q"
 
-config :game, server_cookie: "a"
+config :game,
+  server_cookie: "a",
+  get_request_location: System.get_env("GET_REQUEST_LOCATION") || false
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

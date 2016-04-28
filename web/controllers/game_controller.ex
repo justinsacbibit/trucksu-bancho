@@ -7,9 +7,71 @@ defmodule Game.GameController do
   alias Trucksu.{Beatmap, User}
   alias Game.Utils
 
-  def index(conn, _params) do
+  plug :get_token
+  plug :get_body
+  plug :get_request_ip
+  plug :get_request_location
+
+  defp get_token(conn, _) do
     osu_token = Plug.Conn.get_req_header(conn, "osu-token")
+    assign(conn, :osu_token, osu_token)
+  end
+
+  defp get_body(conn, _) do
     {:ok, body, conn} = Plug.Conn.read_body(conn)
+    assign(conn, :body, body)
+  end
+
+  defp get_request_ip(conn, _) do
+    osu_token = conn.assigns[:osu_token]
+    case osu_token do
+      [] ->
+        request_ip = case Plug.Conn.get_req_header(conn, "x-forwarded-for") do
+          [request_ip] -> request_ip
+          _ -> "0.0.0.0"
+        end
+
+        assign(conn, :request_ip, request_ip)
+      _ ->
+        conn
+    end
+  end
+
+  defp get_request_location(conn, _) do
+    osu_token = conn.assigns[:osu_token]
+    case osu_token do
+      [] ->
+        request_ip = conn.assigns[:request_ip]
+
+        result = if Application.get_env(:game, :get_request_location) do
+          with {:ok, %HTTPoison.Response{body: body}} <- HTTPoison.get("http://ip-api.com/json/#{request_ip}"),
+               {:ok, %{"countryCode" => country_code, "lat" => lat, "lon" => lon} = body} <- Poison.decode(body),
+               do: {:ok, {[lat, lon], Utils.country_id(country_code)}}
+        else
+          nil
+        end
+
+        {location, country_id} = case result do
+          {:ok, result} ->
+            result
+          _ ->
+            {[0.0, 0.0], 0}
+        end
+
+        conn
+        |> assign(:location, location)
+        |> assign(:country_id, country_id)
+
+        # TODO: Set the user's country in the database
+      _ ->
+        conn
+    end
+  end
+
+
+  def index(conn, _params) do
+    osu_token = conn.assigns[:osu_token]
+    body = conn.assigns[:body]
     handle_request(conn, body, osu_token)
   end
 
@@ -26,7 +88,9 @@ defmodule Game.GameController do
       {:ok, user} ->
         {:ok, jwt, _full_claims} = user |> Guardian.encode_and_sign(:token)
 
-        StateServer.Client.add_user(user, jwt)
+        location = conn.assigns[:location]
+        country_id = conn.assigns[:country_id]
+        StateServer.Client.add_user(user, jwt, {location, country_id})
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
       {:error, reason} ->

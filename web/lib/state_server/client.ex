@@ -69,7 +69,7 @@ defmodule Game.StateServer.Client do
 
   If the user is already in the state, resets their state.
   """
-  def add_user(user, token) do
+  def add_user(user, token, {[lat, lon], country_id} \\ {[0.0, 0.0], 0}) do
     remove_user_from_channels(user.id)
 
     {time0, time1, time2} = Time.now
@@ -87,6 +87,9 @@ defmodule Game.StateServer.Client do
       "last_request_time0", time0,
       "last_request_time1", time1,
       "last_request_time2", time2,
+      "lat", "#{lat}",
+      "lon", "#{lon}",
+      "country_id", "#{country_id}",
     ]
 
     query2 = ["HSET", "users", user.username, user.id]
@@ -149,12 +152,12 @@ defmodule Game.StateServer.Client do
   def send_spectator_message(packet, from_spectator_id) do
     spectatee_id = @client |> Exredis.query(["HGET", user_key(from_spectator_id), "spectating"])
 
-    if spectatee_id == :undefined do
+    spectators = if spectatee_id == :undefined do
       # The sender might be the host
-      spectators = @client |> Exredis.query(["SMEMBERS", user_spectators_key(from_spectator_id)])
+      @client |> Exredis.query(["SMEMBERS", user_spectators_key(from_spectator_id)])
     else
       spectators = @client |> Exredis.query(["SMEMBERS", user_spectators_key(spectatee_id)])
-      spectators = [spectatee_id | spectators]
+      [spectatee_id | spectators]
     end
 
     queries = Enum.filter_map(spectators, fn user_id ->
@@ -387,6 +390,29 @@ defmodule Game.StateServer.Client do
     # If the spectator is watching someone
     if current_spectatee_id != :undefined do
       enqueue(current_spectatee_id, Packet.no_song_spectator(spectator_id))
+    end
+  end
+
+  @doc """
+  Returns all location data for a connected user.
+  """
+  def user_location(user_id) do
+    list = @client |> Exredis.query([
+      "HMGET",
+      "user:#{user_id}",
+      "lat",
+      "lon",
+      "country_id",
+    ])
+    [lat, lon, country_id] = list
+    case lat do
+      :undefined ->
+        {[0.0, 0.0], 0}
+      _ ->
+        {lat, _} = Float.parse(lat)
+        {lon, _} = Float.parse(lon)
+        {country_id, _} = Integer.parse(country_id)
+        {[lat, lon], country_id}
     end
   end
 
