@@ -210,6 +210,10 @@ defmodule Game.Packet do
     new(Ids.server_channelJoinSuccess, [{channel_name, :string}])
   end
 
+  def channel_kicked(channel_name) do
+    new(Ids.server_channelKicked, [{channel_name, :string}])
+  end
+
   def server_restart(ms_until_reconnect) do
     new(Ids.server_restart, [{ms_until_reconnect, :uint32}])
   end

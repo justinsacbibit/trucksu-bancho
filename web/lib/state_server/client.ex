@@ -373,10 +373,18 @@ defmodule Game.StateServer.Client do
       ])
 
       enqueue(current_spectatee_id, Packet.remove_spectator(spectator_id))
+
+      num_spectators = @client |> Exredis.query(["SCARD", "user.spectators:#{current_spectatee_id}"])
+      {num_spectators, _} = Integer.parse(num_spectators)
+      if num_spectators == 0 do
+        enqueue(current_spectatee_id, Packet.channel_kicked("#spectator"))
+      end
     else
       Logger.error "Undefined current_spectatee_id in StateServer.Client.stop_spectating/1"
       Logger.error "spectator_id=#{spectator_id}"
     end
+
+    enqueue(spectator_id, Packet.channel_kicked("#spectator"))
   end
 
   @doc """
