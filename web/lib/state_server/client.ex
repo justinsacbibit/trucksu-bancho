@@ -254,10 +254,10 @@ defmodule Game.StateServer.Client do
   @doc """
   Changes the current action for a user.
   """
-  def change_action(user_id, action) do
+  def change_action(user, action) do
     query = [
       "HMSET",
-      user_key(user_id),
+      user_key(user.id),
       "action_id", action[:action_id],
       "action_text", action[:action_text],
       "action_md5", action[:action_md5],
@@ -266,6 +266,11 @@ defmodule Game.StateServer.Client do
     ]
 
     @client |> Exredis.query(query)
+
+    user_panel_packet = Packet.user_panel(user, action)
+    user_stats_packet = Packet.user_stats(user, action)
+    enqueue_all(user_panel_packet)
+    enqueue_all(user_stats_packet)
   end
 
   @doc """

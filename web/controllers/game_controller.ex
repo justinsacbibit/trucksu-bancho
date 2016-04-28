@@ -99,11 +99,7 @@ defmodule Game.GameController do
       end
     end
 
-    StateServer.Client.change_action(user.id, data)
-
-    # TODO: Possibly enqueue user panel as well
-    user_stats_packet = Packet.user_stats(user, data)
-    StateServer.Client.enqueue_all(user_stats_packet)
+    StateServer.Client.change_action(user, data)
 
     <<>>
   end
