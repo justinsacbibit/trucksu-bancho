@@ -149,21 +149,22 @@ defmodule Game.StateServer.Client do
   def send_spectator_message(packet, from_spectator_id) do
     spectatee_id = @client |> Exredis.query(["HGET", user_key(from_spectator_id), "spectating"])
 
-    if spectatee_id != :undefined do
+    if spectatee_id == :undefined do
+      # The sender might be the host
+      spectators = @client |> Exredis.query(["SMEMBERS", user_spectators_key(from_spectator_id)])
+    else
       spectators = @client |> Exredis.query(["SMEMBERS", user_spectators_key(spectatee_id)])
-
       spectators = [spectatee_id | spectators]
-
-      queries = Enum.filter_map(spectators, fn user_id ->
-        {user_id, _} = Integer.parse(user_id)
-        user_id != from_spectator_id
-      end, fn user_id ->
-        ["RPUSH", user_queue_key(user_id), packet]
-      end)
-
-      @client |> Exredis.query_pipe(queries)
     end
 
+    queries = Enum.filter_map(spectators, fn user_id ->
+      {user_id, _} = Integer.parse(user_id)
+      user_id != from_spectator_id
+    end, fn user_id ->
+      ["RPUSH", user_queue_key(user_id), packet]
+    end)
+
+    @client |> Exredis.query_pipe(queries)
   end
 
   @doc """
