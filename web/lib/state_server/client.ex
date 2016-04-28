@@ -378,8 +378,8 @@ defmodule Game.StateServer.Client do
       "HMGET",
       "user:#{user_id}",
       "action_id",
-      "action_md5",
       "action_text",
+      "action_md5",
       "action_mods",
       "game_mode",
     ])
