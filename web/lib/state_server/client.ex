@@ -119,8 +119,7 @@ defmodule Game.StateServer.Client do
       ["DEL", user_queue_key(user_id)],
     ])
 
-    # TODO: Calling this causes noise in logs
-    stop_spectating(user_id)
+    stop_spectating(user_id, false)
 
     enqueue_all(logout_packet)
 
@@ -363,8 +362,13 @@ defmodule Game.StateServer.Client do
 
   @doc """
   Stop spectating.
+
+  Args:
+    - `force`::bool (optional): Should be set to false if the caller does not
+        know if the user is actually spectating someone. Useful for when a
+        user is logging out.
   """
-  def stop_spectating(spectator_id) do
+  def stop_spectating(spectator_id, force \\ true) do
     current_spectatee_id = @client |> Exredis.query(["HGET", "user:#{spectator_id}", "spectating"])
 
     # If the spectator is watching someone, remove them from that someone's list of spectators
@@ -378,8 +382,10 @@ defmodule Game.StateServer.Client do
 
       enqueue(current_spectatee_id, Packet.remove_spectator(spectator_id))
     else
-      Logger.error "Undefined current_spectatee_id in StateServer.Client.stop_spectating/1"
-      Logger.error "spectator_id=#{spectator_id}"
+      if force do
+        Logger.error "Undefined current_spectatee_id in StateServer.Client.stop_spectating/1"
+        Logger.error "spectator_id=#{spectator_id}"
+      end
     end
   end
 
