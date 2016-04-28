@@ -280,7 +280,7 @@ defmodule Game.StateServer.Client do
     current_spectatee_id = @client |> Exredis.query(["HGET", "user:#{spectator_id}", "spectating"])
 
     # If the spectator is watching someone, remove them from that someone's list of spectators
-    if not is_nil(current_spectatee_id) do
+    if current_spectatee_id != :undefined do
       @client |> Exredis.query(["SREM", "user.spectators:#{current_spectatee_id}", spectator_id])
 
       enqueue(current_spectatee_id, Packet.remove_spectator(spectator_id))
@@ -340,7 +340,7 @@ defmodule Game.StateServer.Client do
     current_spectatee_id = @client |> Exredis.query(["HGET", "user:#{spectator_id}", "spectating"])
 
     # If the spectator is watching someone, remove them from that someone's list of spectators
-    if not is_nil(current_spectatee_id) do
+    if current_spectatee_id != :undefined do
       @client |> Exredis.query_pipe([
         # Remove ourselves from the set of spectators
         ["SREM", "user.spectators:#{current_spectatee_id}", spectator_id],
@@ -349,6 +349,9 @@ defmodule Game.StateServer.Client do
       ])
 
       enqueue(current_spectatee_id, Packet.remove_spectator(spectator_id))
+    else
+      Logger.error "Undefined current_spectatee_id in StateServer.Client.stop_spectating/1"
+      Logger.error "spectator_id=#{spectator_id}"
     end
   end
 
@@ -358,7 +361,7 @@ defmodule Game.StateServer.Client do
   def cant_spectate(spectator_id) do
     current_spectatee_id = @client |> Exredis.query(["HGET", "user:#{spectator_id}", "spectating"])
     # If the spectator is watching someone
-    if not is_nil(current_spectatee_id) do
+    if current_spectatee_id != :undefined do
       enqueue(current_spectatee_id, Packet.no_song_spectator(spectator_id))
     end
   end
