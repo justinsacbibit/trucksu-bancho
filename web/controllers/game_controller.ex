@@ -164,7 +164,7 @@ defmodule Game.GameController do
           params = %{
             file_md5: beatmap_md5,
           }
-          Repo.insert! Beatmap.changeset(%Beatmap{}, params)
+          Repo.insert Beatmap.changeset(%Beatmap{}, params)
 
         _beatmap ->
           :ok
@@ -318,6 +318,12 @@ defmodule Game.GameController do
     end
   end
 
+  defp handle_packet(97, data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!userPresenceRequest - #{inspect data}"
+
+    <<>>
+  end
+
   defp handle_packet(packet_id, data, user) do
     Logger.warn "Unhandled packet #{packet_id} from #{Utils.color(user.username, IO.ANSI.blue)}: #{inspect data}"
     <<>>
@@ -342,7 +348,6 @@ defmodule Game.GameController do
     other_channels = []
 
     action = StateServer.Client.action(user.id)
-
     user_panel_packet = Packet.user_panel(user, action)
     user_stats_packet = Packet.user_stats(user, action)
 
