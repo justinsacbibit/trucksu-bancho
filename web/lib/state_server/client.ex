@@ -324,7 +324,7 @@ defmodule Game.StateServer.Client do
       else
         # TODO: Pipeline Redis queries
         Logger.warn "Enqueuing spectate frames from #{host_id} to #{spectator_id}: #{inspect data}"
-        enqueue(spectator_id, data)
+        enqueue(spectator_id, Packet.spectator_frames(data))
       end
     end)
   end
