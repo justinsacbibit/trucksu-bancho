@@ -107,9 +107,14 @@ defmodule Game.GameController do
   defp handle_packet(1, data, user) do
     channel_name = data[:to]
     Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)} to #{Utils.color(channel_name, IO.ANSI.green)}: #{data[:message]}"
-    packet = Packet.send_message(user.username, data[:message], channel_name, user.id)
 
-    StateServer.Client.send_public_message(channel_name, packet, user.id)
+    packet = Packet.send_message(user.username, data[:message], channel_name, user.id)
+    case channel_name do
+      "#spectator" ->
+        StateServer.Client.send_spectator_message(packet, user.id)
+      _ ->
+        StateServer.Client.send_public_message(channel_name, packet, user.id)
+    end
 
     <<>>
   end

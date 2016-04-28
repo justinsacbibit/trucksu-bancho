@@ -144,6 +144,29 @@ defmodule Game.StateServer.Client do
   #end
 
   @doc """
+  Sends a message to the appropriate #spectator channel.
+  """
+  def send_spectator_message(packet, from_spectator_id) do
+    spectatee_id = @client |> Exredis.query(["HGET", user_key(from_spectator_id), "spectating"])
+
+    if spectatee_id != :undefined do
+      spectators = @client |> Exredis.query(["SMEMBERS", user_spectators_key(spectatee_id)])
+
+      spectators = [spectatee_id | spectators]
+
+      queries = Enum.filter_map(spectators, fn user_id ->
+        {user_id, _} = Integer.parse(user_id)
+        user_id != from_spectator_id
+      end, fn user_id ->
+        ["RPUSH", user_queue_key(user_id), packet]
+      end)
+
+      @client |> Exredis.query_pipe(queries)
+    end
+
+  end
+
+  @doc """
   Sends a public message to a channel.
   """
   def send_public_message(channel, packet, from_user_id) do
@@ -429,6 +452,10 @@ defmodule Game.StateServer.Client do
   # Constructs the Redis key for a user packet queue
   defp user_queue_key(user_id) do
     "user.packet_queue:#{user_id}"
+  end
+
+  defp user_spectators_key(user_id) do
+    "user.spectators:#{user_id}"
   end
 
   # Constructs the Redis key for a channel
