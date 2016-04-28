@@ -44,9 +44,17 @@ defmodule Game.GameController do
         request_ip = conn.assigns[:request_ip]
 
         result = if Application.get_env(:game, :get_request_location) do
-          with {:ok, %HTTPoison.Response{body: body}} <- HTTPoison.get("http://ip-api.com/json/#{request_ip}"),
-               {:ok, %{"countryCode" => country_code, "lat" => lat, "lon" => lon} = body} <- Poison.decode(body),
+          result = with {:ok, %HTTPoison.Response{body: body}} <- HTTPoison.get("http://ip-api.com/json/#{request_ip}"),
+               {:ok, %{"countryCode" => country_code, "lat" => lat, "lon" => lon}} <- Poison.decode(body),
                do: {:ok, {[lat, lon], Utils.country_id(country_code)}}
+
+          case result do
+            {:ok, {[_lat, _lon], _country_code}} ->
+              # Verify structure
+              result
+            _ ->
+              nil
+          end
         else
           nil
         end
