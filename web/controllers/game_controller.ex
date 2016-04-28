@@ -318,6 +318,12 @@ defmodule Game.GameController do
     end
   end
 
+  defp handle_packet(97, data, user) do
+    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!userPresenceRequest - #{inspect data}"
+
+    <<>>
+  end
+
   defp handle_packet(packet_id, data, user) do
     Logger.warn "Unhandled packet #{packet_id} from #{Utils.color(user.username, IO.ANSI.blue)}: #{inspect data}"
     <<>>

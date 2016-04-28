@@ -119,6 +119,7 @@ defmodule Game.StateServer.Client do
       ["DEL", user_queue_key(user_id)],
     ])
 
+    # TODO: Calling this causes noise in logs
     stop_spectating(user_id)
 
     enqueue_all(logout_packet)

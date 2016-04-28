@@ -1,4 +1,5 @@
 defmodule Game.Packet.Decoder do
+  require Logger
 
   defp unpack_num(data, size, signed) do
     if signed do
@@ -25,13 +26,38 @@ defmodule Game.Packet.Decoder do
   defp unpack(data, :int8), do: unpack_num(data, 8, true)
   defp unpack(data, :bytes), do: {data, <<>>}
 
-  defp decode_with_format(_data, []) do
+  defp decode_with_format(data, []) do
     # TODO: Log if data is not empty
+    #Logger.error inspect data
     []
   end
   defp decode_with_format(data, [{key, type}|format]) do
     {result, data} = unpack(data, type)
     [{key, result}|decode_with_format(data, format)]
+  end
+
+  defp create_match(data) do
+    format = [
+      match_id: :uint16,
+      in_progress: :uint8,
+      unknown: :uint8,
+      mods: :uint32,
+      match_name: :string,
+      match_password: :string,
+      beatmap_name: :string,
+      beatmap_id: :uint32,
+      beatmap_md5: :string,
+    ]
+
+    format = format ++ Enum.map 0..16, fn(slot_status_id) ->
+      {:"slot_#{slot_status_id}_status", :uint8}
+    end
+
+    format = format ++ Enum.map 0..16, fn(slot_team_id) ->
+      {:"slot_#{slot_team_id}_team", :uint8}
+    end
+
+    decode_with_format(data, format)
   end
 
   defp channel_join(data) do
@@ -97,11 +123,15 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(16, data), do: start_spectating(data)
   defp decode_packet(18, data), do: spectate_frames(data)
   defp decode_packet(25, data), do: send_private_message(data)
+  defp decode_packet(29, _data), do: [] # partLobby
+  defp decode_packet(30, _data), do: [] # joinLobby
+  defp decode_packet(31, data), do: create_match(data)
   defp decode_packet(63, data), do: channel_join(data)
   defp decode_packet(68, _), do: [] # beatmapInfoRequest
   defp decode_packet(78, data), do: channel_part(data)
   defp decode_packet(79, _), do: [] # receiveUpdates
   defp decode_packet(85, data), do: user_stats_request(data)
+  defp decode_packet(97, _), do: [] # userPresenceRequest
   defp decode_packet(_, _), do: [] # TODO: Remove
 
   @doc """
