@@ -1,4 +1,5 @@
 defmodule Game.Packet do
+  require Logger
   alias Game.Packet.Ids
   alias Game.StateServer
   alias Trucksu.{Repo, UserStats}
@@ -112,6 +113,11 @@ defmodule Game.Packet do
     user_id = user.id
     game_mode = action[:game_mode]
 
+    if is_nil(game_mode) do
+      Logger.error "Packet.user_panel/2: game_mode is nil for #{user.username}"
+      Logger.error "Action data: #{inspect action}"
+    end
+
     case stats_and_rank(user_id, game_mode) do
         nil ->
           <<>>
@@ -130,6 +136,8 @@ defmodule Game.Packet do
   end
 
   defp stats_and_rank(user_id, game_mode) do
+    # TODO: Figure out why game_mode is nil sometimes
+    game_mode = game_mode || 0
     Repo.one from s in UserStats,
       join: s_ in fragment("
         SELECT game_rank, id
@@ -156,6 +164,11 @@ defmodule Game.Packet do
 
     user_id = user.id
     game_mode = action[:game_mode]
+
+    if is_nil(game_mode) do
+      Logger.error "Packet.user_stats/2: game_mode is nil for #{user.username}"
+      Logger.error "Action data: #{inspect action}"
+    end
 
     case stats_and_rank(user_id, game_mode) do
         nil ->
@@ -207,6 +220,10 @@ defmodule Game.Packet do
 
   def channel_join_success(channel_name) do
     new(Ids.server_channelJoinSuccess, [{channel_name, :string}])
+  end
+
+  def channel_kicked(channel_name) do
+    new(Ids.server_channelKicked, [{channel_name, :string}])
   end
 
   def server_restart(ms_until_reconnect) do
