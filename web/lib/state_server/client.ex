@@ -5,6 +5,7 @@ defmodule Game.StateServer.Client do
   require Logger
   use Timex
   alias Game.{Packet, Utils}
+  alias Trucksu.{Repo, User}
 
   @client :redis
   @default_channels ["#osu", "#announce"]
@@ -202,9 +203,8 @@ defmodule Game.StateServer.Client do
   Enqueues a packet to be sent to a user, identified by their username.
   """
   def enqueue_for_username(username, packet) do
-    user_id = @client |> Exredis.query(["HGET", "users", username])
-
-    enqueue(user_id, packet)
+    user = Repo.get_by User, username: username
+    enqueue(user.id, packet)
   end
 
   @doc """
