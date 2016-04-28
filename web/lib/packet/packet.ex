@@ -99,20 +99,23 @@ defmodule Game.Packet do
     new(Ids.server_userPresenceBundle, data)
   end
 
-  def user_panel(user, action \\ nil) do
+  def user_panel(user) do
+    case StateServer.Client.action(user.id) do
+      nil -> <<>>
+      action -> user_panel(user, action)
+    end
+  end
+  def user_panel(user, action) do
     {[latitude, longitude], country_id} = StateServer.Client.user_location(user.id)
 
     # TODO: timezone
     timezone = 24
     user_rank = 0 # normal
 
-    if is_nil(action) do
-      action = StateServer.Client.action(user.id)
-    end
-
     user_id = user.id
     game_mode = action[:game_mode]
 
+    # TODO: Remove
     if is_nil(game_mode) do
       Logger.error "Packet.user_panel/2: game_mode is nil for #{user.username}"
       Logger.error "Action data: #{inspect action}"
@@ -157,14 +160,17 @@ defmodule Game.Packet do
       select: {s, s_.game_rank}
   end
 
-  def user_stats(user, action \\ nil) do
-    if is_nil(action) do
-      action = StateServer.Client.action(user.id)
+  def user_stats(user) do
+    case StateServer.Client.action(user.id) do
+      nil -> <<>>
+      action -> user_stats(user, action)
     end
-
+  end
+  def user_stats(user, action) do
     user_id = user.id
     game_mode = action[:game_mode]
 
+    # TODO: Remove
     if is_nil(game_mode) do
       Logger.error "Packet.user_stats/2: game_mode is nil for #{user.username}"
       Logger.error "Action data: #{inspect action}"

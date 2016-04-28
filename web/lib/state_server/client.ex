@@ -440,13 +440,8 @@ defmodule Game.StateServer.Client do
 
     case action_id do
       :undefined ->
-        [
-          "action_id", 0,
-          "action_text", "",
-          "action_md5", "",
-          "action_mods", 0,
-          "game_mode", 0,
-        ]
+        Logger.warn "Attempted to get action for #{user_id}, who appears to be offline"
+        nil
       _ ->
         {action_id, _} = Integer.parse(action_id)
         {action_mods, _} = Integer.parse(action_mods)
