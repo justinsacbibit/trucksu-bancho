@@ -2,9 +2,13 @@ defmodule Game.GameController do
   use Game.Web, :controller
   require Logger
   alias Game.{Packet, StateServer}
-  alias Trucksu.{Repo, Session}
-  # Models
-  alias Trucksu.{Beatmap, User}
+  alias Trucksu.{
+    Session,
+
+    Repo,
+    Beatmap,
+    User,
+  }
   alias Game.Utils
 
   plug :get_token
@@ -44,34 +48,26 @@ defmodule Game.GameController do
         request_ip = conn.assigns[:request_ip]
 
         result = if Application.get_env(:game, :get_request_location) do
-          result = with {:ok, %HTTPoison.Response{body: body}} <- HTTPoison.get("http://ip-api.com/json/#{request_ip}"),
+          with {:ok, %HTTPoison.Response{body: body}} <- HTTPoison.get("http://ip-api.com/json/#{request_ip}"),
                {:ok, %{"countryCode" => country_code, "lat" => lat, "lon" => lon}} <- Poison.decode(body),
-               do: {:ok, {[lat, lon], Utils.country_id(country_code)}}
-
-          case result do
-            {:ok, {[_lat, _lon], _country_code}} ->
-              # Verify structure
-              result
-            _ ->
-              nil
-          end
+               do: {:location, {[lat, lon], country_code}}
         else
           nil
         end
 
-        {location, country_id} = case result do
-          {:ok, result} ->
-            result
+        case result do
+          {:location, {location, country_code}} ->
+            conn
+            |> assign(:location, location)
+            |> assign(:country_code, country_code)
           _ ->
-            {[0.0, 0.0], 0}
+            conn
+            |> assign(:location, [0.0, 0.0])
+            |> assign(:country_code, "BL")
         end
-
-        conn
-        |> assign(:location, location)
-        |> assign(:country_id, country_id)
-
-        # TODO: Set the user's country in the database
       _ ->
+
+        # Don't get the request location if the user is already logged in
         conn
     end
   end
@@ -97,8 +93,11 @@ defmodule Game.GameController do
         {:ok, jwt, _full_claims} = user |> Guardian.encode_and_sign(:token)
 
         location = conn.assigns[:location]
-        country_id = conn.assigns[:country_id]
-        StateServer.Client.add_user(user, jwt, {location, country_id})
+        country_code = conn.assigns[:country_code]
+        StateServer.Client.add_user(user, jwt, location, Utils.country_id(country_code))
+
+        changeset = Ecto.Changeset.change user, %{country: country_code}
+        Repo.update! changeset
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
       {:error, reason} ->
