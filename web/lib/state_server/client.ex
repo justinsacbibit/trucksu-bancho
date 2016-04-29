@@ -4,7 +4,8 @@ defmodule Game.StateServer.Client do
   """
   require Logger
   use Timex
-  alias Game.{Packet, Utils}
+  alias Game.Packet
+  alias Game.Utils.Color
   alias Trucksu.{Repo, User}
 
   @client :redis
@@ -16,7 +17,7 @@ defmodule Game.StateServer.Client do
   OTP application callback.
   """
   def initialize() do
-    Logger.warn Utils.color("Initialized Redis state", IO.ANSI.green)
+    Logger.warn Color.color("Initialized Redis state", IO.ANSI.green)
   end
 
   @doc """
@@ -101,6 +102,12 @@ defmodule Game.StateServer.Client do
     end
 
     @client |> Exredis.query_pipe([query1, query2, query3] ++ channel_queries)
+
+    # TODO: Lots of redundant queries here
+    user_panel_packet = Packet.user_panel(user)
+    user_stats_packet = Packet.user_stats(user)
+    enqueue_all(user_panel_packet)
+    enqueue_all(user_stats_packet)
   end
 
   @doc """

@@ -2,7 +2,11 @@ defmodule Game.Packet do
   require Logger
   alias Game.Packet.Ids
   alias Game.StateServer
-  alias Trucksu.{Repo, UserStats}
+  alias Trucksu.{
+    Repo,
+    User,
+    UserStats,
+  }
   import Ecto.Query, only: [from: 2]
 
   defp pack_num(int, size, signed) when is_integer(int) and is_integer(size) do
@@ -78,13 +82,19 @@ defmodule Game.Packet do
     new(Ids.server_supporterGMT, [{result, :uint32}])
   end
 
-  def friends_list(_user) do
-    friends = [123, 346]
-    friends = []
+  @doc """
+  Constructs a packet that contains a user's friend list.
 
-    data = [{length(friends), :int16}]
+  Preloads the user's friends from the database.
+  """
+  def friends_list(user) do
+    user = Repo.preload user, :friends
 
-    data = data ++ Enum.map(friends, &({&1, :int32}))
+    data = [{length(user.friends), :int16}]
+
+    data = data ++
+      for %User{id: id} <- user.friends,
+        do: {id, :int32}
 
     new(Ids.server_friendsList, data)
   end

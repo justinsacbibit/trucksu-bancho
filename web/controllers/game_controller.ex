@@ -1,15 +1,17 @@
 defmodule Game.GameController do
   use Game.Web, :controller
+  import Ecto.Query, only: [from: 2]
   require Logger
-  alias Game.{Packet, StateServer}
+  alias Game.{Packet, StateServer, Utils}
   alias Trucksu.{
     Session,
 
     Repo,
     Beatmap,
+    Friendship,
     User,
   }
-  alias Game.Utils
+  alias Game.Utils.Color
 
   plug :get_token
   plug :get_body
@@ -101,7 +103,7 @@ defmodule Game.GameController do
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
       {:error, reason} ->
-        Logger.warn Utils.color("Login failed for #{username}. Reason: #{reason}", IO.ANSI.red)
+        Logger.warn "Login failed for #{Color.username(username)}. Reason: #{reason}"
         render prepare_conn(conn), "response.raw", data: Packet.login_failed
     end
   end
@@ -149,7 +151,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(0, data, user) do
-    Logger.warn "changeAction for #{Utils.color(user.username, IO.ANSI.blue)}: #{inspect Enum.map(data, &(elem(&1, 1)))}"
+    Logger.warn "changeAction for #{Color.username(user.username)}: #{inspect Enum.map(data, &(elem(&1, 1)))}"
 
     if data[:action_id] == 2 do
       # The user has started to play a song
@@ -177,7 +179,7 @@ defmodule Game.GameController do
 
   defp handle_packet(1, data, user) do
     channel_name = data[:to]
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)} to #{Utils.color(channel_name, IO.ANSI.green)}: #{data[:message]}"
+    Logger.warn "#{Color.username(user.username)} to #{Color.channel(channel_name)}: #{data[:message]}"
 
     packet = Packet.send_message(user.username, data[:message], channel_name, user.id)
     case channel_name do
@@ -191,14 +193,14 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(2, _data, user) do
-    Logger.warn "Handling logout for #{Utils.color(user.username, IO.ANSI.blue)}"
+    Logger.warn "Handling logout for #{Color.username(user.username)}"
     StateServer.Client.remove_user(user.id)
 
     <<>>
   end
 
   defp handle_packet(3, _data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!requestStatusUpdate"
+    Logger.warn "#{Color.username(user.username)}!requestStatusUpdate"
     user_panel_packet = Packet.user_panel(user)
     user_stats_packet = Packet.user_stats(user)
 
@@ -210,7 +212,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(16, data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!startSpectating"
+    Logger.warn "#{Color.username(user.username)}!startSpectating"
 
     host_id = data[:user_id]
     StateServer.Client.spectate(user.id, host_id)
@@ -219,7 +221,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(17, _data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!stopSpectating"
+    Logger.warn "#{Color.username(user.username)}!stopSpectating"
 
     StateServer.Client.stop_spectating(user.id)
 
@@ -227,7 +229,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(18, data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!spectateFrames"
+    Logger.warn "#{Color.username(user.username)}!spectateFrames"
 
     StateServer.Client.spectate_frames(user.id, data[:data])
 
@@ -235,7 +237,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(21, _data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!cantSpectate"
+    Logger.warn "#{Color.username(user.username)}!cantSpectate"
 
     StateServer.Client.cant_spectate(user.id)
 
@@ -243,7 +245,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(25, data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)} to #{Utils.color(data[:to], IO.ANSI.red)}: #{data[:message]}"
+    Logger.warn "#{Color.username(user.username)} to #{Color.username(data[:to])}: #{data[:message]}"
 
     to_username = data[:to]
     message = data[:message]
@@ -257,26 +259,26 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(29, _data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!partLobby"
+    Logger.warn "#{Color.username(user.username)}!partLobby"
 
     <<>>
   end
 
   defp handle_packet(30, _data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!joinLobby"
+    Logger.warn "#{Color.username(user.username)}!joinLobby"
 
     <<>>
   end
 
   defp handle_packet(31, data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!createMatch: #{inspect data}"
+    Logger.warn "#{Color.username(user.username)}!createMatch: #{inspect data}"
 
     <<>>
   end
 
   defp handle_packet(63, data, user) do
     channel_name = data[:channel]
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!channelJoin - #{channel_name}"
+    Logger.warn "#{Color.username(user.username)}!channelJoin - #{channel_name}"
 
     StateServer.Client.join_channel(user.id, channel_name)
 
@@ -284,13 +286,60 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(68, data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!beatmapInfoRequest: #{inspect data}"
+    Logger.warn "#{Color.username(user.username)}!beatmapInfoRequest: #{inspect data}"
+    <<>>
+  end
+
+  defp handle_packet(73, data, user) do
+    friend_id = data[:friend_id]
+    Logger.warn "#{Color.username(user.username)}!friendAdd: #{friend_id}"
+
+    user_id = user.id
+    changeset = Friendship.changeset(%Friendship{}, %{
+      requester_id: user_id,
+      receiver_id: friend_id,
+    })
+    case Repo.insert changeset do
+      {:ok, friendship} ->
+        friendship = Repo.preload friendship, :receiver
+        Logger.warn "#{Color.username(user.username)} has added #{friendship.receiver.username}!"
+      {:error, changeset} ->
+        Logger.warn "#{Color.username(user.username)} failed to add #{friend_id}"
+        Logger.warn inspect changeset.errors
+    end
+
+    <<>>
+  end
+
+  defp handle_packet(74, data, user) do
+
+    user_id = user.id
+    friend_id = data[:friend_id]
+
+    query = from f in Friendship,
+      where: f.requester_id == ^user_id
+        and f.receiver_id == ^friend_id,
+        preload: [:receiver]
+
+    case Repo.one query do
+      nil ->
+        Logger.error "#{Color.username(user.username)} tried to remove #{friend_id}, who they're not already friends with!"
+      friendship ->
+        case Repo.delete friendship do
+          {:ok, _} ->
+            Logger.warn "#{Color.username(user.username)} has removed #{friendship.receiver.username}!"
+          {:error, changeset} ->
+            Logger.warn "#{Color.username(user.username)} failed to remove #{friendship.receiver.username}"
+            Logger.warn inspect changeset.errors
+        end
+    end
+
     <<>>
   end
 
   # client_channelPart
   defp handle_packet(78, [channel: channel_name], user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!channelPart - #{channel_name}"
+    Logger.warn "#{Color.username(user.username)}!channelPart - #{channel_name}"
 
     # For some reason, osu! client sends a channelPart when a private message
     # channel is closed
@@ -318,13 +367,13 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(97, data, user) do
-    Logger.warn "#{Utils.color(user.username, IO.ANSI.blue)}!userPresenceRequest - #{inspect data}"
+    Logger.warn "#{Color.username(user.username)}!userPresenceRequest - #{inspect data}"
 
     <<>>
   end
 
   defp handle_packet(packet_id, data, user) do
-    Logger.warn "Unhandled packet #{packet_id} from #{Utils.color(user.username, IO.ANSI.blue)}: #{inspect data}"
+    Logger.warn "Unhandled packet #{packet_id} from #{Color.username(user.username)}: #{inspect data}"
     <<>>
   end
 
@@ -349,9 +398,6 @@ defmodule Game.GameController do
     action = StateServer.Client.action(user.id)
     user_panel_packet = Packet.user_panel(user, action)
     user_stats_packet = Packet.user_stats(user, action)
-
-    StateServer.Client.enqueue_all(user_panel_packet)
-    StateServer.Client.enqueue_all(user_stats_packet)
 
     online_users = StateServer.Client.user_ids()
     |> Enum.map(fn(user_id) ->

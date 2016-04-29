@@ -1,7 +1,8 @@
 defmodule Game.UserTimeout do
   require Logger
   use Timex
-  alias Game.{StateServer, Utils}
+  alias Game.StateServer
+  alias Game.Utils.Color
 
   def start_link do
     Task.start_link(fn -> check_timeout() end)
@@ -20,7 +21,7 @@ defmodule Game.UserTimeout do
 
       if Time.diff(Time.now, time, :seconds) > @expire do
         username = StateServer.Client.username(user_id)
-        Logger.warn "Disconnecting #{Utils.color(username, IO.ANSI.blue)}"
+        Logger.warn "Disconnecting #{Color.username(username)}"
         StateServer.Client.remove_user(user_id)
       end
     end

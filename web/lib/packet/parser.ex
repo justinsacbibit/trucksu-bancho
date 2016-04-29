@@ -89,6 +89,12 @@ defmodule Game.Packet.Decoder do
     ])
   end
 
+  defp add_remove_friend(data) do
+    decode_with_format(data, [
+      friend_id: :int32,
+    ])
+  end
+
   defp decode_packet(0, data), do: change_action(data)
   defp decode_packet(1, data), do: send_public_message(data)
   defp decode_packet(2, _), do: [] # logout
@@ -99,6 +105,8 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(25, data), do: send_private_message(data)
   defp decode_packet(63, data), do: channel_join(data)
   defp decode_packet(68, _), do: [] # beatmapInfoRequest
+  defp decode_packet(73, data), do: add_remove_friend(data)
+  defp decode_packet(74, data), do: add_remove_friend(data)
   defp decode_packet(78, data), do: channel_part(data)
   defp decode_packet(79, _), do: [] # receiveUpdates
   defp decode_packet(85, data), do: user_stats_request(data)
