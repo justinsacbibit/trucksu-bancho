@@ -32,3 +32,31 @@ server {
 
   include {{ .DOKKU_ROOT }}/{{ .APP }}/nginx.conf.d/*.conf;
 }
+server {
+  listen      80;
+  listen      443 ssl;
+  server_name c.trucksu.com c1.trucksu.com;
+
+  ssl_certificate     /etc/letsencrypt/live/b.trucksu.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/b.trucksu.com/privkey.pem;
+
+  access_log /var/log/nginx/{{ .APP }}-access.log;
+  error_log /var/log/nginx/{{ .APP }}-error.log;
+
+  # TODO: Set up file upload restrictions
+
+  location / {
+    proxy_pass http://{{ .APP }};
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Port $server_port;
+    proxy_set_header X-Request-Start $msec;
+    proxy_redirect off;
+  }
+
+  include {{ .DOKKU_ROOT }}/{{ .APP }}/nginx.conf.d/*.conf;
+}
