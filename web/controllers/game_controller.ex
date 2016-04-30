@@ -229,7 +229,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(18, data, user) do
-    Logger.warn "#{Color.username(user.username)}!spectateFrames"
+    # Logger.warn "#{Color.username(user.username)}!spectateFrames"
 
     StateServer.Client.spectate_frames(user.id, data[:data])
 
@@ -350,16 +350,19 @@ defmodule Game.GameController do
     <<>>
   end
 
-  defp handle_packet(85, data, _user) do
+  defp handle_packet(85, data, user) do
     # userStatsRequest
 
     # No idea why the integer is coming out unsigned, this is -1 in signed 32 bit
-    unless data[:user_id] == 4294967295 do
-      case Repo.get User, data[:user_id] do
+    user_id = data[:user_id]
+    unless user_id == 4294967295 do
+      case Repo.get User, user_id do
         nil ->
+          Logger.warn "#{Color.username(user.username)}!userStatsRequest - user with id #{user_id} does not exist"
           <<>>
-        user ->
-          Packet.user_stats(user)
+        target_user ->
+          Logger.warn "#{Color.username(user.username)}!userStatsRequest - #{target_user.username}"
+          Packet.user_stats(target_user)
       end
     else
       <<>>
@@ -374,15 +377,13 @@ defmodule Game.GameController do
 
   defp handle_packet(packet_id, data, user) do
     Logger.warn "Unhandled packet #{packet_id} from #{Color.username(user.username)}: #{inspect data}"
+
     <<>>
   end
 
   defp prepare_conn(conn, cho_token \\ "") do
-    if cho_token != "" do
-      conn = conn
-      |> Plug.Conn.put_resp_header("cho-token", cho_token)
-    end
     conn
+    |> Plug.Conn.put_resp_header("cho-token", cho_token)
     |> Plug.Conn.put_resp_header("cho-protocol", "19")
     |> Plug.Conn.put_resp_header("Keep-Alive", "timeout=5, max=100")
     |> Plug.Conn.put_resp_header("Connection", "keep-alive")
