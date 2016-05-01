@@ -3,6 +3,7 @@ defmodule Game.UserTimeout do
   use Timex
   alias Game.StateServer
   alias Game.Utils.Color
+  alias Trucksu.{Repo, User}
 
   def start_link do
     Task.start_link(fn -> check_timeout() end)
@@ -20,8 +21,8 @@ defmodule Game.UserTimeout do
       time = StateServer.Client.retrieve_last_request_time(user_id)
 
       if Time.diff(Time.now, time, :seconds) > @expire do
-        username = StateServer.Client.username(user_id)
-        Logger.warn "Disconnecting #{Color.username(username)}"
+        user = Repo.get! User, user_id
+        Logger.warn "Disconnecting #{Color.username(user.username)}"
         StateServer.Client.remove_user(user_id)
       end
     end
