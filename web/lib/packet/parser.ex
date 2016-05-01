@@ -1,4 +1,5 @@
 defmodule Game.Packet.Decoder do
+  require Logger
 
   defp unpack_num(data, size, signed) do
     if signed do
@@ -124,10 +125,20 @@ defmodule Game.Packet.Decoder do
       [{packet_id, [unknown: "", message: "Hey!", to: "#osu"]}]
   """
   def decode_packets(stacked_packets) do
-    separate_packets(stacked_packets)
+    decoded_packets = separate_packets(stacked_packets)
     |> Enum.map(fn({packet_id, data}) ->
-      {packet_id, decode_packet(packet_id, data)}
+      try do
+        {packet_id, decode_packet(packet_id, data)}
+      rescue
+        _e in FunctionClauseError ->
+          Logger.error "Got FunctionClauseError when decoding packet with id #{packet_id}"
+          Logger.error "Data: #{inspect data}"
+          {}
+      end
     end)
+
+    # Filter out empty tuples
+    for {_, _} = decoded_packet <- decoded_packets, do: decoded_packet
   end
 
   defp separate_packets(<<>>) do

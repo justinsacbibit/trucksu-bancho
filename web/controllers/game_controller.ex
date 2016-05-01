@@ -151,7 +151,11 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(0, data, user) do
-    Logger.warn "changeAction for #{Color.username(user.username)}: #{inspect Enum.map(data, &(elem(&1, 1)))}"
+    case data[:action_id] do
+      0 -> :ok
+      _ ->
+        Logger.warn "changeAction for #{Color.username(user.username)}: #{inspect Enum.map(data, &(elem(&1, 1)))}"
+    end
 
     if data[:action_id] == 2 do
       # The user has started to play a song
@@ -200,7 +204,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(3, _data, user) do
-    Logger.warn "#{Color.username(user.username)}!requestStatusUpdate"
+    Logger.info "#{Color.username(user.username)}!requestStatusUpdate"
     user_panel_packet = Packet.user_panel(user)
     user_stats_packet = Packet.user_stats(user)
 
@@ -212,10 +216,15 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(16, data, user) do
-    Logger.warn "#{Color.username(user.username)}!startSpectating"
-
     host_id = data[:user_id]
-    StateServer.Client.spectate(user.id, host_id)
+    case Repo.get User, host_id do
+      nil ->
+        Logger.error "#{Color.username(user.username)}!startSpectating a user that does not exist: #{host_id}"
+      host ->
+        Logger.warn "#{Color.username(user.username)}!startSpectating #{host.username}"
+
+        StateServer.Client.spectate(user.id, host_id)
+    end
 
     <<>>
   end
@@ -361,7 +370,7 @@ defmodule Game.GameController do
           Logger.warn "#{Color.username(user.username)}!userStatsRequest - user with id #{user_id} does not exist"
           <<>>
         target_user ->
-          Logger.warn "#{Color.username(user.username)}!userStatsRequest - #{target_user.username}"
+          Logger.info "#{Color.username(user.username)}!userStatsRequest - #{target_user.username}"
           Packet.user_stats(target_user)
       end
     else
