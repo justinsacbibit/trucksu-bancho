@@ -1,5 +1,7 @@
 defmodule Game.Packet do
   require Logger
+  use Bitwise
+
   alias Game.Packet.Ids
   alias Game.StateServer
   alias Trucksu.{
@@ -34,7 +36,19 @@ defmodule Game.Packet do
     <<0>>
   end
   defp pack(data, :string) do
-    <<0x0b>> <> pack(byte_size(data), :uint8) <> data
+    <<0x0b>> <> encode(byte_size(data)) <> data
+  end
+
+  def encode(value), do: encode_leb128(value, 0, <<>>)
+
+  defp encode_leb128(value, shift, acc) when (value >>> shift) < 128 do
+    chunk = value >>> shift
+    <<acc::binary, chunk::unsigned-little-size(8)>>
+  end
+
+  defp encode_leb128(value, shift, acc) do
+    chunk = value >>> shift
+    encode_leb128(value, shift + 7, <<acc::binary, (chunk ||| 128)::unsigned-little-size(8)>>)
   end
 
   def new(id, data_list) do

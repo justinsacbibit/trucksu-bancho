@@ -12,7 +12,9 @@ defmodule Game.Packet.Decoder do
   end
 
   defp unpack(<<0, rest::binary>>, :string), do: {"", rest}
-  defp unpack(<<0x0b, len::unsigned-little-size(8), str::binary-size(len)-unit(8), rest::binary>>, :string) do
+  defp unpack(<<0x0b, rest::binary>>, :string) do
+    {len, rest} = decode_uleb128(rest)
+    <<str::binary-size(len)-unit(8), rest::binary>> = rest
     {str, rest}
   end
 
@@ -112,6 +114,19 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(79, _), do: [] # receiveUpdates
   defp decode_packet(85, data), do: user_stats_request(data)
   defp decode_packet(_, _), do: [] # TODO: Remove
+
+  def decode_uleb128(binary) do
+    {size, bitstring, tail} = pdecode_uleb128(binary, 0, <<>>)
+    <<value::unsigned-integer-size(size)>> = bitstring
+    {value, tail}
+  end
+
+  defp pdecode_uleb128(<<0::size(1), chunk::bitstring-size(7), tail::binary>>, size, acc) do
+    {size + 7, <<chunk::bitstring, acc::bitstring>>, tail}
+  end
+  defp pdecode_uleb128(<<1::size(1), chunk::bitstring-size(7), tail::binary>>, size, acc) do
+    pdecode_uleb128(tail, size + 7, <<chunk::bitstring, acc::bitstring>>)
+  end
 
   @doc """
   Decodes the given `stacked_packets` binary.
