@@ -4,7 +4,7 @@ defmodule Game.StateServer.Client do
   """
   require Logger
   use Timex
-  alias Game.Packet
+  alias Game.{Packet, TruckLord}
   alias Game.Utils.Color
   alias Trucksu.{Repo, User}
 
@@ -454,8 +454,12 @@ defmodule Game.StateServer.Client do
 
     case action_id do
       :undefined ->
-        Logger.warn "Attempted to get action for #{user_id}, who appears to be offline"
-        nil
+        if user_id != TruckLord.user_id do
+          Logger.warn "Attempted to get action for #{user_id}, who appears to be offline"
+          nil
+        else
+          :bot
+        end
       _ ->
         {action_id, _} = Integer.parse(action_id)
         {action_mods, _} = Integer.parse(action_mods)

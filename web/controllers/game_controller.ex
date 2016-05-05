@@ -2,7 +2,12 @@ defmodule Game.GameController do
   use Game.Web, :controller
   import Ecto.Query, only: [from: 2]
   require Logger
-  alias Game.{Packet, StateServer, Utils}
+  alias Game.{
+    Packet,
+    StateServer,
+    Utils,
+    TruckLord,
+  }
   alias Trucksu.{
     Session,
 
@@ -254,16 +259,25 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(25, data, user) do
-    Logger.warn "#{Color.username(user.username)} to #{Color.username(data[:to])}: #{data[:message]}"
 
     to_username = data[:to]
     message = data[:message]
 
-    packet = Packet.send_message(user.username, message, to_username, user.id)
+    trucklord_username = TruckLord.username
+    case to_username do
+      ^trucklord_username ->
+        TruckLord.receive_message(message, user)
 
-    StateServer.Client.enqueue_for_username(to_username, packet)
+      _ ->
+        Logger.warn "#{Color.username(user.username)} to #{Color.username(data[:to])}: #{data[:message]}"
 
-    # TODO: If to_username is not found in the state, inform the client that the user is offline
+        # TODO: Fix lack of "this user is offline" message when the user is offline"
+        packet = Packet.send_message(user.username, message, to_username, user.id)
+
+        StateServer.Client.enqueue_for_username(to_username, packet)
+    end
+
+
     <<>>
   end
 
@@ -409,7 +423,7 @@ defmodule Game.GameController do
     user_panel_packet = Packet.user_panel(user, action)
     user_stats_packet = Packet.user_stats(user, action)
 
-    online_users = StateServer.Client.user_ids()
+    online_users = [TruckLord.user_id | StateServer.Client.user_ids()]
     |> Enum.map(fn(user_id) ->
       Repo.get! User, user_id
     end)

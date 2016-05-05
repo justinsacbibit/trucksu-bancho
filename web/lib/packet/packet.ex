@@ -9,6 +9,7 @@ defmodule Game.Packet do
     User,
     UserStats,
   }
+  alias Game.TruckLord
   import Ecto.Query, only: [from: 2]
 
   defp pack_num(int, size, signed) when is_integer(int) and is_integer(size) do
@@ -116,6 +117,10 @@ defmodule Game.Packet do
   def online_users do
     user_ids = StateServer.Client.user_ids()
 
+    #if TruckLord.is_online? do
+    #  user_ids = [TruckLord.user_id | user_ids]
+    #end
+
     data = [{length(user_ids), :int16}]
 
     data = data ++ Enum.map(user_ids, &({&1, :int32}))
@@ -124,41 +129,68 @@ defmodule Game.Packet do
   end
 
   def user_panel(user) do
-    case StateServer.Client.action(user.id) do
-      nil -> <<>>
-      action -> user_panel(user, action)
+    trucklord_user_id = TruckLord.user_id
+    case user.id do
+      #^trucklord_user_id ->
+      #  user_panel(user, nil)
+      _ ->
+        case StateServer.Client.action(user.id) do
+          nil ->
+            Logger.warn "user_panel/1 , offline"
+            <<>>
+          :bot ->
+            user_panel(user, nil)
+          action ->
+            user_panel(user, action)
+        end
     end
   end
   def user_panel(user, action) do
-    {[latitude, longitude], country_id} = StateServer.Client.user_location(user.id)
+    trucklord_user_id = TruckLord.user_id
+    case user.id do
+      trucklord_user_id ->
+        new(Ids.server_userPanel, [
+          {user.id, :uint32},
+          {user.username, :string},
+          {0, :uint8},
+          {0, :uint8},
+          {4, :uint8},
+          {0.0, :float},
+          {0.0, :float},
+          {0, :uint32},
+        ])
 
-    # TODO: timezone
-    timezone = 24
-    user_rank = 0 # normal
+      _ ->
+        {[latitude, longitude], country_id} = StateServer.Client.user_location(user.id)
 
-    user_id = user.id
-    game_mode = action[:game_mode]
+        # TODO: timezone
+        timezone = 24
+        user_rank = 0 # normal
 
-    # TODO: Remove
-    if is_nil(game_mode) do
-      Logger.error "Packet.user_panel/2: game_mode is nil for #{user.username}"
-      Logger.error "Action data: #{inspect action}"
-    end
+        user_id = user.id
+        game_mode = action[:game_mode]
 
-    case stats_and_rank(user_id, game_mode) do
-        nil ->
-          <<>>
-        {_stats, game_rank} ->
-          new(Ids.server_userPanel, [
-            {user.id, :uint32},
-            {user.username, :string},
-            {timezone, :uint8},
-            {country_id, :uint8},
-            {user_rank, :uint8},
-            {longitude, :float},
-            {latitude, :float},
-            {game_rank, :uint32},
-          ])
+        # TODO: Remove
+        if is_nil(game_mode) do
+          Logger.error "Packet.user_panel/2: game_mode is nil for #{user.username}"
+          Logger.error "Action data: #{inspect action}"
+        end
+
+        case stats_and_rank(user_id, game_mode) do
+            nil ->
+              <<>>
+            {_stats, game_rank} ->
+              new(Ids.server_userPanel, [
+                {user.id, :uint32},
+                {user.username, :string},
+                {timezone, :uint8},
+                {country_id, :uint8},
+                {user_rank, :uint8},
+                {longitude, :float},
+                {latitude, :float},
+                {game_rank, :uint32},
+              ])
+        end
     end
   end
 
@@ -184,41 +216,73 @@ defmodule Game.Packet do
       select: {s, s_.game_rank}
   end
 
+  def user_presence_single(user_id) do
+    new(Ids.server_userPresenceSingle, [
+      {user_id, :int32}
+    ])
+  end
+
   def user_stats(user) do
     case StateServer.Client.action(user.id) do
-      nil -> <<>>
+      nil ->
+        Logger.warn "user_stats/1 , offline"
+        <<>>
+      :bot ->
+        <<>>
       action -> user_stats(user, action)
     end
   end
   def user_stats(user, action) do
-    user_id = user.id
-    game_mode = action[:game_mode]
+    trucklord_user_id = TruckLord.user_id
+    case user.id do
+      ^trucklord_user_id ->
+        #Logger.error "not sending user_stats for trucklord"
+        new(Ids.server_userStats, [
+          {user.id, :uint32},
+          {0, :uint8},
+          {"", :string},
+          {"", :string},
+          {"", :int32},
+          {"", :uint8},
+          {0, :int32},
+          {0, :uint64},
+          {0.0, :float},
+          {0, :uint32},
+          {0, :uint64},
+          {0, :uint32},
+          {0, :uint16},
+        ])
+        #<<>>
+      _ ->
+        user_id = user.id
+        game_mode = action[:game_mode]
 
-    # TODO: Remove
-    if is_nil(game_mode) do
-      Logger.error "Packet.user_stats/2: game_mode is nil for #{user.username}"
-      Logger.error "Action data: #{inspect action}"
-    end
+        # TODO: Remove
+        if is_nil(game_mode) do
+          Logger.error "Packet.user_stats/2: game_mode is nil for #{user.username}"
+          Logger.error "Action data: #{inspect action}"
+        end
 
-    case stats_and_rank(user_id, game_mode) do
-        nil ->
-          <<>>
-        {stats, game_rank} ->
-          new(Ids.server_userStats, [
-            {user.id, :uint32},
-            {action[:action_id], :uint8},
-            {action[:action_text], :string},
-            {action[:action_md5], :string},
-            {action[:action_mods], :int32},
-            {action[:game_mode], :uint8},
-            {0, :int32},
-            {stats.ranked_score, :uint64},
-            {stats.accuracy, :float},
-            {stats.playcount, :uint32},
-            {stats.total_score, :uint64},
-            {game_rank, :uint32},
-            {round(stats.pp), :uint16},
-          ])
+        case stats_and_rank(user_id, game_mode) do
+            nil ->
+              <<>>
+            {stats, game_rank} ->
+              new(Ids.server_userStats, [
+                {user.id, :uint32},
+                {action[:action_id], :uint8},
+                {action[:action_text], :string},
+                {action[:action_md5], :string},
+                {action[:action_mods], :int32},
+                {action[:game_mode], :uint8},
+                {0, :int32},
+                {stats.ranked_score, :uint64},
+                {stats.accuracy, :float},
+                {stats.playcount, :uint32},
+                {stats.total_score, :uint64},
+                {game_rank, :uint32},
+                {round(stats.pp), :uint16},
+              ])
+        end
     end
   end
 

@@ -17,6 +17,8 @@ config :game, Game.Endpoint,
 # config :logger, :console, format: "[$level] $message\n"
 
 config :game,
+  server_cookie: "a",
+  trucksu_url: "http://localhost:4000",
   get_request_location: true
 
 # Set a higher stacktrace during development.
