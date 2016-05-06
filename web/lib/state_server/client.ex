@@ -12,6 +12,9 @@ defmodule Game.StateServer.Client do
   @default_channels ["#osu", "#announce"]
   @other_channels []
 
+  # Determines the amount of time to ignore logout requests after logging in.
+  @recently_logged_in_threshold 10 # seconds
+
   @doc """
   Initializes Redis state if necessary. This should be called within the
   OTP application callback.
@@ -95,13 +98,18 @@ defmodule Game.StateServer.Client do
 
     query2 = ["HSET", "users", user.username, user.id]
 
+    # Clear the user's current packet queue, if present
     query3 = ["DEL", user_queue_key(user.id)]
+
+    # Used to keep track of whether the user recently logged in, so that we
+    # can ignore logout packets that occur too soon
+    query4 = ["SET", user_login_key(user.id), "1", "EX", "#{@recently_logged_in_threshold}"]
 
     channel_queries = Enum.map @default_channels, fn default_channel ->
       ["SADD", channel_key(default_channel), user.id]
     end
 
-    @client |> Exredis.query_pipe([query1, query2, query3] ++ channel_queries)
+    @client |> Exredis.query_pipe([query1, query2, query3, query4] ++ channel_queries)
 
     # TODO: Lots of redundant queries here
     user_panel_packet = Packet.user_panel(user)
@@ -474,6 +482,23 @@ defmodule Game.StateServer.Client do
     end
   end
 
+  @doc """
+  Determines if a user has logged in within the past @recently_logged_in_threshold seconds.
+  """
+  def recently_logged_in?(user_id) do
+    exists = @client |> Exredis.query(["EXISTS", user_login_key(user_id)])
+
+    case exists do
+      "1" ->
+        true
+      "0" ->
+        false
+      _ ->
+        Logger.error "recently_logged_in? got unknown exists value: #{exists}"
+        false
+    end
+  end
+
   ## Helper functions
 
   defp remove_user_from_channels(user_id) do
@@ -496,6 +521,10 @@ defmodule Game.StateServer.Client do
 
   defp user_spectators_key(user_id) do
     "user.spectators:#{user_id}"
+  end
+
+  defp user_login_key(user_id) do
+    "user.login:#{user_id}"
   end
 
   # Constructs the Redis key for a channel
