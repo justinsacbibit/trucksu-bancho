@@ -4,19 +4,23 @@ defmodule Game.StateServer.Client do
   """
   require Logger
   use Timex
-  alias Game.{Packet, Utils}
+  alias Game.Packet
+  alias Game.Utils.Color
   alias Trucksu.{Repo, User}
 
   @client :redis
   @default_channels ["#osu", "#announce"]
   @other_channels []
 
+  # Determines the amount of time to ignore logout requests after logging in.
+  @recently_logged_in_threshold 10 # seconds
+
   @doc """
   Initializes Redis state if necessary. This should be called within the
   OTP application callback.
   """
   def initialize() do
-    Logger.warn Utils.color("Initialized Redis state", IO.ANSI.green)
+    Logger.warn Color.color("Initialized Redis state", IO.ANSI.green)
   end
 
   @doc """
@@ -69,7 +73,7 @@ defmodule Game.StateServer.Client do
 
   If the user is already in the state, resets their state.
   """
-  def add_user(user, token, {[lat, lon], country_id} \\ {[0.0, 0.0], 0}) do
+  def add_user(user, token, [lat, lon] \\ [0.0, 0.0], country_id \\ 0) do
     remove_user_from_channels(user.id)
 
     {time0, time1, time2} = Time.now
@@ -94,13 +98,24 @@ defmodule Game.StateServer.Client do
 
     query2 = ["HSET", "users", user.username, user.id]
 
+    # Clear the user's current packet queue, if present
     query3 = ["DEL", user_queue_key(user.id)]
+
+    # Used to keep track of whether the user recently logged in, so that we
+    # can ignore logout packets that occur too soon
+    query4 = ["SET", user_login_key(user.id), "1", "EX", "#{@recently_logged_in_threshold}"]
 
     channel_queries = Enum.map @default_channels, fn default_channel ->
       ["SADD", channel_key(default_channel), user.id]
     end
 
-    @client |> Exredis.query_pipe([query1, query2, query3] ++ channel_queries)
+    @client |> Exredis.query_pipe([query1, query2, query3, query4] ++ channel_queries)
+
+    # TODO: Lots of redundant queries here
+    user_panel_packet = Packet.user_panel(user)
+    user_stats_packet = Packet.user_stats(user)
+    enqueue_all(user_panel_packet)
+    enqueue_all(user_stats_packet)
   end
 
   @doc """
@@ -119,8 +134,7 @@ defmodule Game.StateServer.Client do
       ["DEL", user_queue_key(user_id)],
     ])
 
-    # TODO: Calling this causes noise in logs
-    stop_spectating(user_id)
+    stop_spectating(user_id, false)
 
     enqueue_all(logout_packet)
 
@@ -363,8 +377,13 @@ defmodule Game.StateServer.Client do
 
   @doc """
   Stop spectating.
+
+  Args:
+    - `force`::bool (optional): Should be set to false if the caller does not
+        know if the user is actually spectating someone. Useful for when a
+        user is logging out.
   """
-  def stop_spectating(spectator_id) do
+  def stop_spectating(spectator_id, force \\ true) do
     current_spectatee_id = @client |> Exredis.query(["HGET", "user:#{spectator_id}", "spectating"])
 
     # If the spectator is watching someone, remove them from that someone's list of spectators
@@ -378,8 +397,10 @@ defmodule Game.StateServer.Client do
 
       enqueue(current_spectatee_id, Packet.remove_spectator(spectator_id))
     else
-      Logger.error "Undefined current_spectatee_id in StateServer.Client.stop_spectating/1"
-      Logger.error "spectator_id=#{spectator_id}"
+      if force do
+        Logger.error "Undefined current_spectatee_id in StateServer.Client.stop_spectating/1"
+        Logger.error "spectator_id=#{spectator_id}"
+      end
     end
   end
 
@@ -441,13 +462,8 @@ defmodule Game.StateServer.Client do
 
     case action_id do
       :undefined ->
-        [
-          "action_id", 0,
-          "action_text", "",
-          "action_md5", "",
-          "action_mods", 0,
-          "game_mode", 0,
-        ]
+        Logger.warn "Attempted to get action for #{user_id}, who appears to be offline"
+        nil
       _ ->
         {action_id, _} = Integer.parse(action_id)
         {action_mods, _} = Integer.parse(action_mods)
@@ -459,6 +475,23 @@ defmodule Game.StateServer.Client do
           action_mods: action_mods,
           game_mode: game_mode,
         ]
+    end
+  end
+
+  @doc """
+  Determines if a user has logged in within the past @recently_logged_in_threshold seconds.
+  """
+  def recently_logged_in?(user_id) do
+    exists = @client |> Exredis.query(["EXISTS", user_login_key(user_id)])
+
+    case exists do
+      "1" ->
+        true
+      "0" ->
+        false
+      _ ->
+        Logger.error "recently_logged_in? got unknown exists value: #{exists}"
+        false
     end
   end
 
@@ -484,6 +517,10 @@ defmodule Game.StateServer.Client do
 
   defp user_spectators_key(user_id) do
     "user.spectators:#{user_id}"
+  end
+
+  defp user_login_key(user_id) do
+    "user.login:#{user_id}"
   end
 
   # Constructs the Redis key for a channel

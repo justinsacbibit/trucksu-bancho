@@ -1,8 +1,4 @@
 defmodule Game.Utils do
-  def color(message, color) do
-    color <> message <> IO.ANSI.reset
-  end
-
   @country_map %{
     "LV" => 132,
     "AD" => 3,

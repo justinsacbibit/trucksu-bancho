@@ -1,8 +1,14 @@
 defmodule Game.Packet do
   require Logger
+  use Bitwise
+
   alias Game.Packet.Ids
   alias Game.StateServer
-  alias Trucksu.{Repo, UserStats}
+  alias Trucksu.{
+    Repo,
+    User,
+    UserStats,
+  }
   import Ecto.Query, only: [from: 2]
 
   defp pack_num(int, size, signed) when is_integer(int) and is_integer(size) do
@@ -30,7 +36,19 @@ defmodule Game.Packet do
     <<0>>
   end
   defp pack(data, :string) do
-    <<0x0b>> <> pack(byte_size(data), :uint8) <> data
+    <<0x0b>> <> encode(byte_size(data)) <> data
+  end
+
+  def encode(value), do: encode_leb128(value, 0, <<>>)
+
+  defp encode_leb128(value, shift, acc) when (value >>> shift) < 128 do
+    chunk = value >>> shift
+    <<acc::binary, chunk::unsigned-little-size(8)>>
+  end
+
+  defp encode_leb128(value, shift, acc) do
+    chunk = value >>> shift
+    encode_leb128(value, shift + 7, <<acc::binary, (chunk ||| 128)::unsigned-little-size(8)>>)
   end
 
   def new(id, data_list) do
@@ -78,13 +96,19 @@ defmodule Game.Packet do
     new(Ids.server_supporterGMT, [{result, :uint32}])
   end
 
-  def friends_list(_user) do
-    friends = [123, 346]
-    friends = []
+  @doc """
+  Constructs a packet that contains a user's friend list.
 
-    data = [{length(friends), :int16}]
+  Preloads the user's friends from the database.
+  """
+  def friends_list(user) do
+    user = Repo.preload user, :friends
 
-    data = data ++ Enum.map(friends, &({&1, :int32}))
+    data = [{length(user.friends), :int16}]
+
+    data = data ++
+      for %User{id: id} <- user.friends,
+        do: {id, :int32}
 
     new(Ids.server_friendsList, data)
   end
@@ -99,20 +123,23 @@ defmodule Game.Packet do
     new(Ids.server_userPresenceBundle, data)
   end
 
-  def user_panel(user, action \\ nil) do
+  def user_panel(user) do
+    case StateServer.Client.action(user.id) do
+      nil -> <<>>
+      action -> user_panel(user, action)
+    end
+  end
+  def user_panel(user, action) do
     {[latitude, longitude], country_id} = StateServer.Client.user_location(user.id)
 
     # TODO: timezone
     timezone = 24
     user_rank = 0 # normal
 
-    if is_nil(action) do
-      action = StateServer.Client.action(user.id)
-    end
-
     user_id = user.id
     game_mode = action[:game_mode]
 
+    # TODO: Remove
     if is_nil(game_mode) do
       Logger.error "Packet.user_panel/2: game_mode is nil for #{user.username}"
       Logger.error "Action data: #{inspect action}"
@@ -157,14 +184,17 @@ defmodule Game.Packet do
       select: {s, s_.game_rank}
   end
 
-  def user_stats(user, action \\ nil) do
-    if is_nil(action) do
-      action = StateServer.Client.action(user.id)
+  def user_stats(user) do
+    case StateServer.Client.action(user.id) do
+      nil -> <<>>
+      action -> user_stats(user, action)
     end
-
+  end
+  def user_stats(user, action) do
     user_id = user.id
     game_mode = action[:game_mode]
 
+    # TODO: Remove
     if is_nil(game_mode) do
       Logger.error "Packet.user_stats/2: game_mode is nil for #{user.username}"
       Logger.error "Action data: #{inspect action}"

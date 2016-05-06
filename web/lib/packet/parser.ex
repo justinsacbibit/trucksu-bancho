@@ -12,7 +12,9 @@ defmodule Game.Packet.Decoder do
   end
 
   defp unpack(<<0, rest::binary>>, :string), do: {"", rest}
-  defp unpack(<<0x0b, len::unsigned-little-size(8), str::binary-size(len)-unit(8), rest::binary>>, :string) do
+  defp unpack(<<0x0b, rest::binary>>, :string) do
+    {len, rest} = decode_uleb128(rest)
+    <<str::binary-size(len)-unit(8), rest::binary>> = rest
     {str, rest}
   end
 
@@ -115,6 +117,12 @@ defmodule Game.Packet.Decoder do
     ])
   end
 
+  defp add_remove_friend(data) do
+    decode_with_format(data, [
+      friend_id: :int32,
+    ])
+  end
+
   defp decode_packet(0, data), do: change_action(data)
   defp decode_packet(1, data), do: send_public_message(data)
   defp decode_packet(2, _), do: [] # logout
@@ -128,11 +136,26 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(31, data), do: create_match(data)
   defp decode_packet(63, data), do: channel_join(data)
   defp decode_packet(68, _), do: [] # beatmapInfoRequest
+  defp decode_packet(73, data), do: add_remove_friend(data)
+  defp decode_packet(74, data), do: add_remove_friend(data)
   defp decode_packet(78, data), do: channel_part(data)
   defp decode_packet(79, _), do: [] # receiveUpdates
   defp decode_packet(85, data), do: user_stats_request(data)
   defp decode_packet(97, _), do: [] # userPresenceRequest
   defp decode_packet(_, _), do: [] # TODO: Remove
+
+  def decode_uleb128(binary) do
+    {size, bitstring, tail} = pdecode_uleb128(binary, 0, <<>>)
+    <<value::unsigned-integer-size(size)>> = bitstring
+    {value, tail}
+  end
+
+  defp pdecode_uleb128(<<0::size(1), chunk::bitstring-size(7), tail::binary>>, size, acc) do
+    {size + 7, <<chunk::bitstring, acc::bitstring>>, tail}
+  end
+  defp pdecode_uleb128(<<1::size(1), chunk::bitstring-size(7), tail::binary>>, size, acc) do
+    pdecode_uleb128(tail, size + 7, <<chunk::bitstring, acc::bitstring>>)
+  end
 
   @doc """
   Decodes the given `stacked_packets` binary.
@@ -146,10 +169,20 @@ defmodule Game.Packet.Decoder do
       [{packet_id, [unknown: "", message: "Hey!", to: "#osu"]}]
   """
   def decode_packets(stacked_packets) do
-    separate_packets(stacked_packets)
+    decoded_packets = separate_packets(stacked_packets)
     |> Enum.map(fn({packet_id, data}) ->
-      {packet_id, decode_packet(packet_id, data)}
+      try do
+        {packet_id, decode_packet(packet_id, data)}
+      rescue
+        _e in FunctionClauseError ->
+          Logger.error "Got FunctionClauseError when decoding packet with id #{packet_id}"
+          Logger.error "Data: #{inspect data}"
+          {}
+      end
     end)
+
+    # Filter out empty tuples
+    for {_, _} = decoded_packet <- decoded_packets, do: decoded_packet
   end
 
   defp separate_packets(<<>>) do
