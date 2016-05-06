@@ -197,8 +197,12 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(2, _data, user) do
-    Logger.warn "Handling logout for #{Color.username(user.username)}"
-    StateServer.Client.remove_user(user.id)
+    if StateServer.Client.recently_logged_in?(user.id) do
+      Logger.warn "Ignoring logout for #{Color.username(user.username)}"
+    else
+      Logger.warn "Handling logout for #{Color.username(user.username)}"
+      StateServer.Client.remove_user(user.id)
+    end
 
     <<>>
   end
