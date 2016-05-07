@@ -307,7 +307,12 @@ defmodule Game.GameController do
   defp handle_packet(31, data, user) do
     Logger.warn "#{Color.username(user.username)}!createMatch: #{inspect(data, limit: :infinity)}"
 
-    StateServer.Client.create_match(user, data)
+    cond do
+      user.id == 3 or user.id == 5 ->
+        StateServer.Client.create_match(user, data)
+      true ->
+        :ok
+    end
 
     <<>>
   end
@@ -315,9 +320,13 @@ defmodule Game.GameController do
   defp handle_packet(32, data, user) do
     Logger.warn "#{Color.username(user.username)}!joinMatch: match_id=#{data[:match_id]} password=#{data[:password]}"
 
-    StateServer.Client.join_match(user, data[:match_id], data[:password])
-
-    <<>>
+    cond do
+      user.id == 3 or user.id == 5 ->
+        StateServer.Client.join_match(user, data[:match_id], data[:password])
+        <<>>
+      true ->
+        Packet.match_join_fail()
+    end
   end
 
   defp handle_packet(33, _data, user) do

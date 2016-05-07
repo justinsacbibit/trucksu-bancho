@@ -173,12 +173,16 @@ defmodule Game.StateServer.Client do
     ])
 
     part_match(user_id)
-
+    remove_spectators(user_id)
     stop_spectating(user_id, false)
 
     enqueue_all(logout_packet)
 
     remove_user_from_channels(user_id)
+  end
+
+  defp remove_spectators(user_id) do
+    # TODO
   end
 
   @doc """
@@ -1261,6 +1265,8 @@ defmodule Game.StateServer.Client do
           ]
         end
 
+        @client |> Exredis.query_pipe(update_queries)
+
         for [_, "32", user_id] <- @client |> Exredis.query_pipe(queries) do
           {user_id, _} = Integer.parse(user_id)
           # TODO: Pipelining
@@ -1285,6 +1291,7 @@ defmodule Game.StateServer.Client do
 
         # TODO: Error checking
         @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_ready}"])
+        send_multi_update(match_id)
     end
   end
 

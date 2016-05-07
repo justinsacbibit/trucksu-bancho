@@ -372,8 +372,8 @@ defmodule Game.Packet do
     new(Ids.server_matchJoinSuccess, mp_packet_data(data))
   end
 
-  def match_join_fail(data) do
-    new(Ids.server_matchJoinFail, mp_packet_data(data))
+  def match_join_fail() do
+    new(Ids.server_matchJoinFail, [])
   end
 
   def change_match_password(new_password) do
@@ -394,7 +394,7 @@ defmodule Game.Packet do
 
   def match_frames(slot_id, data) do
     # First, split the data. Separate out the first 4 bytes
-    <<first::binary-size(32), rest::binary>> = data
+    <<first::binary-size(4), _::binary-size(1), rest::binary>> = data
 
     # The slot id goes between the data sections
     new(Ids.server_matchScoreUpdate, [{first, :bytes}, {slot_id, :int8}, {rest, :bytes}])
