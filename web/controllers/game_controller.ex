@@ -298,6 +298,14 @@ defmodule Game.GameController do
     <<>>
   end
 
+  defp handle_packet(32, data, user) do
+    Logger.warn "#{Color.username(user.username)}!joinMatch: match_id=#{data[:match_id]} password=#{data[:password]}"
+
+    StateServer.Client.join_match(user, data[:match_id], data[:password])
+
+    <<>>
+  end
+
   defp handle_packet(33, _data, user) do
     Logger.warn "#{Color.username(user.username)}!partMatch"
 

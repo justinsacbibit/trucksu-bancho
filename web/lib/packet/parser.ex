@@ -176,6 +176,13 @@ defmodule Game.Packet.Decoder do
     ])
   end
 
+  def join_match(data) do
+    decode_with_format(data, [
+      match_id: :uint32,
+      password: :string,
+    ])
+  end
+
   defp decode_packet(0, data), do: change_action(data)
   defp decode_packet(1, data), do: send_public_message(data)
   defp decode_packet(2, _), do: [] # logout
@@ -187,6 +194,7 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(29, _data), do: [] # partLobby
   defp decode_packet(30, _data), do: [] # joinLobby
   defp decode_packet(31, data), do: create_match(data)
+  defp decode_packet(32, data), do: join_match(data)
   defp decode_packet(38, data), do: match_change_slot(data)
   defp decode_packet(40, data), do: match_lock(data)
   defp decode_packet(41, data), do: match_change_settings(data)
