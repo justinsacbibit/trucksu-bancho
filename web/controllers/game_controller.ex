@@ -186,9 +186,12 @@ defmodule Game.GameController do
     Logger.warn "#{Color.username(user.username)} to #{Color.channel(channel_name)}: #{data[:message]}"
 
     packet = Packet.send_message(user.username, data[:message], channel_name, user.id)
+    # TODO: Extract the case statement into the StateServer?
     case channel_name do
       "#spectator" ->
         StateServer.Client.send_spectator_message(packet, user.id)
+      "#multiplayer" ->
+        StateServer.Client.send_multiplayer_message(packet, user)
       _ ->
         StateServer.Client.send_public_message(channel_name, packet, user.id)
     end
@@ -274,24 +277,143 @@ defmodule Game.GameController do
   defp handle_packet(29, _data, user) do
     Logger.warn "#{Color.username(user.username)}!partLobby"
 
+    StateServer.Client.part_lobby(user.id)
+
     <<>>
   end
 
   defp handle_packet(30, _data, user) do
     Logger.warn "#{Color.username(user.username)}!joinLobby"
 
+    StateServer.Client.join_lobby(user.id)
+
     <<>>
   end
 
   defp handle_packet(31, data, user) do
-    Logger.warn "#{Color.username(user.username)}!createMatch: #{inspect data}"
+    Logger.warn "#{Color.username(user.username)}!createMatch: #{inspect(data, limit: :infinity)}"
+
+    StateServer.Client.create_match(user, data)
+
+    <<>>
+  end
+
+  defp handle_packet(33, _data, user) do
+    Logger.warn "#{Color.username(user.username)}!partMatch"
+
+    StateServer.Client.part_match(user.id)
+
+    <<>>
+  end
+
+  defp handle_packet(38, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchChangeSlot: #{inspect data}"
+
+    StateServer.Client.change_slot(user, data[:slot_id])
+
+    <<>>
+  end
+
+  defp handle_packet(39, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchReady"
+
+    StateServer.Client.match_ready(user)
+
+    <<>>
+  end
+
+  defp handle_packet(40, data, user) do
+    Logger.warn "#{Color.username(user.username)}!lockMatchSlot: slot #{data[:slot_id]}"
+
+    StateServer.Client.lock_match_slot(user, data[:slot_id])
+
+    <<>>
+  end
+
+  defp handle_packet(41, data, user) do
+    # client_matchChangeSettings
+    Logger.warn "#{Color.username(user.username)}!matchChangeSettings: #{inspect(data, limit: :infinity)}"
+
+    StateServer.Client.change_match_settings(user, data)
+
+    <<>>
+  end
+
+  defp handle_packet(44, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchStart: #{inspect(data, limit: :infinity)}"
+
+    StateServer.Client.match_start(user)
+
+    <<>>
+  end
+
+  defp handle_packet(47, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchScoreUpdate"
+
+    StateServer.Client.match_frames(user, data[:data])
+
+    <<>>
+  end
+
+  defp handle_packet(49, _data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchComplete"
+
+    StateServer.Client.match_complete(user)
+
+    <<>>
+  end
+
+  defp handle_packet(51, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchChangeMods: #{inspect(data, limit: :infinity)}"
+
+    StateServer.Client.change_mods(user, data[:mods])
+
+    <<>>
+  end
+
+  defp handle_packet(52, _data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchLoadComplete"
+
+    StateServer.Client.match_load_complete(user)
+
+    <<>>
+  end
+
+  defp handle_packet(54, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchNoBeatmap"
+
+    StateServer.Client.match_has_beatmap(user, false)
+
+    <<>>
+  end
+
+  defp handle_packet(55, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchNotReady"
+
+    StateServer.Client.match_not_ready(user)
+
+    <<>>
+  end
+
+  defp handle_packet(59, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchHasBeatmap"
+
+    StateServer.Client.match_has_beatmap(user, true)
+
+    <<>>
+  end
+
+  defp handle_packet(60, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchSkipRequest"
+
+    StateServer.Client.match_skip_request(user)
 
     <<>>
   end
 
   defp handle_packet(63, data, user) do
     channel_name = data[:channel]
-    Logger.warn "#{Color.username(user.username)}!channelJoin - #{channel_name}"
+    Logger.warn "#{Color.username(user.username)}!channelJoin: #{channel_name}"
 
     StateServer.Client.join_channel(user.id, channel_name)
 
@@ -351,7 +473,8 @@ defmodule Game.GameController do
   end
 
   # client_channelPart
-  defp handle_packet(78, [channel: channel_name], user) do
+  defp handle_packet(78, data, user) do
+    channel_name = data[:channel]
     Logger.warn "#{Color.username(user.username)}!channelPart - #{channel_name}"
 
     # For some reason, osu! client sends a channelPart when a private message
@@ -359,6 +482,12 @@ defmodule Game.GameController do
     if String.starts_with?(channel_name, "#") do
       StateServer.Client.part_channel(user.id, channel_name)
     end
+
+    <<>>
+  end
+
+  defp handle_packet(79, _data, _user) do
+    # client_receiveUpdates
 
     <<>>
   end

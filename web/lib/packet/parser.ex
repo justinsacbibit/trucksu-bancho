@@ -1,5 +1,6 @@
 defmodule Game.Packet.Decoder do
   require Logger
+  alias Game.StateServer
 
   defp unpack_num(data, size, signed) do
     if signed do
@@ -31,35 +32,11 @@ defmodule Game.Packet.Decoder do
   defp decode_with_format(data, []) do
     # TODO: Log if data is not empty
     #Logger.error inspect data
-    []
+    [{:undecoded, data}]
   end
   defp decode_with_format(data, [{key, type}|format]) do
     {result, data} = unpack(data, type)
     [{key, result}|decode_with_format(data, format)]
-  end
-
-  defp create_match(data) do
-    format = [
-      match_id: :uint16,
-      in_progress: :uint8,
-      unknown: :uint8,
-      mods: :uint32,
-      match_name: :string,
-      match_password: :string,
-      beatmap_name: :string,
-      beatmap_id: :uint32,
-      beatmap_md5: :string,
-    ]
-
-    format = format ++ Enum.map 0..16, fn(slot_status_id) ->
-      {:"slot_#{slot_status_id}_status", :uint8}
-    end
-
-    format = format ++ Enum.map 0..16, fn(slot_team_id) ->
-      {:"slot_#{slot_team_id}_team", :uint8}
-    end
-
-    decode_with_format(data, format)
   end
 
   defp channel_join(data) do
@@ -123,6 +100,82 @@ defmodule Game.Packet.Decoder do
     ])
   end
 
+  ## Multiplayer packets
+
+  defp match_change_slot(data) do
+    decode_with_format(data, [
+      slot_id: :int32,
+    ])
+  end
+
+  defp match_settings(data) do
+    format = [
+      match_id: :uint16,
+      in_progress: :uint8,
+      unknown: :uint8,
+      mods: :uint32,
+      match_name: :string,
+      match_password: :string,
+      beatmap_name: :string,
+      beatmap_id: :uint32,
+      beatmap_md5: :string,
+    ]
+
+    format = format ++ Enum.map 0..15, fn(slot_status_id) ->
+      {:"slot_#{slot_status_id}_status", :uint8}
+    end
+
+    format = format ++ Enum.map 0..15, fn(slot_team_id) ->
+      {:"slot_#{slot_team_id}_team", :uint8}
+    end
+
+    decoded_data = decode_with_format(data, format)
+    format = format ++
+    for slot_id <- 0..15,
+        status = decoded_data[:"slot_#{slot_id}_status"],
+        status != StateServer.Client.slot_status_free,
+        status != StateServer.Client.slot_status_locked do
+      # occupied slot
+      {:"slot_#{slot_id}_user_id", :int32}
+    end
+
+    format = format ++ [
+      host_user_id: :int32,
+      game_mode: :int8,
+      scoring_type: :int8,
+      team_type: :int8,
+      free_mods: :int8,
+    ]
+
+    decode_with_format(data, format)
+  end
+
+  defp create_match(data) do
+    match_settings(data)
+  end
+
+  defp match_lock(data) do
+    decode_with_format(data, [
+      slot_id: :int32,
+    ])
+  end
+
+  defp match_change_settings(data) do
+    match_settings(data)
+  end
+
+  defp match_change_mods(data) do
+    decode_with_format(data, [
+      mods: :int32,
+    ])
+  end
+
+  defp match_frames(data) do
+    decode_with_format(data, [
+      data: :bytes,
+    ])
+  end
+
   defp decode_packet(0, data), do: change_action(data)
   defp decode_packet(1, data), do: send_public_message(data)
   defp decode_packet(2, _), do: [] # logout
@@ -134,6 +187,11 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(29, _data), do: [] # partLobby
   defp decode_packet(30, _data), do: [] # joinLobby
   defp decode_packet(31, data), do: create_match(data)
+  defp decode_packet(38, data), do: match_change_slot(data)
+  defp decode_packet(40, data), do: match_lock(data)
+  defp decode_packet(41, data), do: match_change_settings(data)
+  defp decode_packet(47, data), do: match_frames(data)
+  defp decode_packet(51, data), do: match_change_mods(data)
   defp decode_packet(63, data), do: channel_join(data)
   defp decode_packet(68, _), do: [] # beatmapInfoRequest
   defp decode_packet(73, data), do: add_remove_friend(data)
@@ -142,7 +200,7 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(79, _), do: [] # receiveUpdates
   defp decode_packet(85, data), do: user_stats_request(data)
   defp decode_packet(97, _), do: [] # userPresenceRequest
-  defp decode_packet(_, _), do: [] # TODO: Remove
+  defp decode_packet(_, data), do: decode_with_format(data, [])
 
   def decode_uleb128(binary) do
     {size, bitstring, tail} = pdecode_uleb128(binary, 0, <<>>)
