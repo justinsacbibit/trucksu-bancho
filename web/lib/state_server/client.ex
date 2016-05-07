@@ -1254,6 +1254,8 @@ defmodule Game.StateServer.Client do
           ]
         end
 
+        @client |> Exredis.query_pipe(update_queries)
+
         for [_, "32", user_id] <- @client |> Exredis.query_pipe(queries) do
           {user_id, _} = Integer.parse(user_id)
           # TODO: Pipelining
