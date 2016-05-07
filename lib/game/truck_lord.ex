@@ -149,6 +149,11 @@ defmodule Game.TruckLord do
       {:error, error} ->
         Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
         Logger.error inspect error
+
+        message = "I wasn't able to calculate the pp for that map - you might have an outdated version"
+        Logger.warn "Sending message to #{user.username}: #{message}"
+        packet = Packet.send_message(@username, message, user.username, @user_id)
+        StateServer.Client.enqueue(user.id, packet)
     end
   end
 end
