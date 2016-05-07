@@ -624,6 +624,8 @@ defmodule Game.StateServer.Client do
 
     @client |> Exredis.query_pipe([query1 | slot_queries])
 
+    # TODO: Clear spectators
+
     stop_spectating(user.id, false)
 
     join_match(user, match_id, data[:match_password])
@@ -965,8 +967,9 @@ defmodule Game.StateServer.Client do
   defp send_multi_update(match_id) do
     match_user_ids = @client |> Exredis.query(["SMEMBERS", match_users_key(match_id)])
 
+    match = match_data(match_id)
     for match_user_id <- match_user_ids do
-      enqueue(match_user_id, Packet.update_match(match_data(match_id)))
+      enqueue(match_user_id, Packet.update_match(match))
     end
   end
 
