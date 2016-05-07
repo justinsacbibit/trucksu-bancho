@@ -11,7 +11,6 @@ defmodule Game.TruckLord do
 
   def start_link do
     initial_state = %{
-      pp: %{},
     }
     GenServer.start_link(__MODULE__, initial_state, name: @name)
   end
@@ -51,37 +50,27 @@ defmodule Game.TruckLord do
 
   ## Callbacks
 
-  def handle_cast({:receive_message, message, user}, %{pp: pp_state} = state) do
-    Logger.warn "#{user.username} to TrucksuLord received message \"#{message}\""
+  def handle_cast({:receive_message, message, user}, state) do
+    Logger.warn "#{Color.username(user.username)} to TrucksuLord received message \"#{message}\""
 
-    pp_state = case message do
-      <<1>> <> "ACTION is listening to [" <> url_and_stuff ->
-        case String.split(url_and_stuff, " ") do
-          ["http://osu.ppy.sh/b/" <> beatmap_id | _] ->
-            handle_beatmap_id_str(pp_state, user, beatmap_id)
-          s ->
-            Logger.error "Received beatmap pp request, but was unable to parse out the beatmap id"
-            Logger.error inspect s
-            pp_state
+    case message do
+      "!np" ->
+        action = StateServer.Client.action(user.id)
+        case action do
+          nil ->
+            Logger.warn "#{Color.username(user.username)} wanted to calculate PP but appears to be offline"
+          _ ->
+
+            file_md5 = action[:action_md5]
+            mods = action[:action_mods]
+            game_mode = action[:game_mode]
+            calculate_pp(user, file_md5, mods, game_mode)
         end
-      <<1>> <> "ACTION is playing [" <> url_and_stuff ->
-        case String.split(url_and_stuff, " ") do
-          ["http://osu.ppy.sh/b/" <> beatmap_id | rest] ->
-            mods = for "+" <> mod <- rest, do: mod
-            mods = convert_mod_strings(mods)
-            handle_beatmap_id_str(pp_state, user, beatmap_id, mods)
-          s ->
-            Logger.error "Received beatmap pp request, but was unable to parse out the beatmap id"
-            Logger.error inspect s
-            pp_state
-        end
-      s ->
-        Logger.error "Received beatmap pp request, but was unable to parse the message"
-        Logger.error inspect s
-        pp_state
+      _ ->
+        :ok
     end
 
-    {:noreply, %{state | pp: pp_state}}
+    {:noreply, state}
   end
 
   def handle_call(:is_online?, _from, state) do
@@ -96,61 +85,31 @@ defmodule Game.TruckLord do
     {:reply, @username, state}
   end
 
-  defp convert_mod_strings(mod_strings) do
-    Enum.reduce(mod_strings, 0, fn mod_string, mods ->
-      mod = case mod_string do
-        "Hidden" -> 8
-        "Hidden" <> <<1>> -> 8
-        "HardRock" -> 16
-        "HardRock" <> <<1>> -> 16
-        "DoubleTime" -> 64
-        "DoubleTime" <> <<1>> -> 64
-        _ -> 0
-      end
+  defp calculate_pp(user, file_md5, mods, game_mode) do
+    Logger.warn "#{Color.username(user.username)} sent pp request: file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
+    trucksu_url = Application.get_env(:game, :trucksu_url)
+    server_cookie = Application.get_env(:game, :server_cookie)
+    case HTTPoison.get(trucksu_url <> "/api/v1/pp-calc", [], params: [{"file_md5", file_md5}, {"mods", "#{mods}"}, {"m", "#{game_mode}"}, {"c", server_cookie}]) do
+      {:ok, %HTTPoison.Response{body: body}} ->
+        case Poison.decode body do
+          {:ok, %{"pp" => pp, "osu_beatmap" => %{"version" => version, "title" => title, "difficultyrating" => stars, "creator" => creator, "artist" => artist}}} ->
 
-      mods ||| mod
-    end)
-  end
+            message = "#{pp}pp for #{artist} - #{title} (#{creator}) [#{version}] (#{stars}*) (mods: #{mods})"
+            Logger.warn "Sending message to #{user.username}: #{message}"
+            packet = Packet.send_message(@username, message, user.username, @user_id)
+            StateServer.Client.enqueue(user.id, packet)
 
-  defp handle_beatmap_id_str(pp_state, user, beatmap_id, mods \\ 0) do
-    case Integer.parse(beatmap_id) do
-      {beatmap_id, _} ->
-        Logger.warn "#{user.username} sent pp request for #{beatmap_id} with mods #{mods}"
-        trucksu_url = Application.get_env(:game, :trucksu_url)
-        server_cookie = Application.get_env(:game, :server_cookie)
-        case HTTPoison.get(trucksu_url <>"/api/v1/pp-calc", [], params: [{"b", "#{beatmap_id}"}, {"mods", "#{mods}"}, {"m", "0"}, {"c", server_cookie}]) do
-          {:ok, %HTTPoison.Response{body: body}} ->
-            case Poison.decode body do
-              {:ok, %{"pp" => pp, "osu_beatmap" => %{"version" => version, "title" => title, "difficultyrating" => stars, "creator" => creator, "artist" => artist}}} ->
-
-                message = "#{pp}pp for #{artist} - #{title} (#{creator}) [#{version}] (#{stars}*) (mods: #{mods})"
-                Logger.warn "Sending message to #{user.username}: #{message}"
-                packet = Packet.send_message(@username, message, user.username, @user_id)
-                StateServer.Client.enqueue(user.id, packet)
-
-                Map.put(pp_state, user.id, %{beatmap_id: beatmap_id})
-
-              {:error, error} ->
-                Logger.error "Unable to calculate pp for #{beatmap_id} with #{mods}"
-                Logger.error inspect error
-                pp_state
-
-              _ ->
-                Logger.error "Unable to calculate pp for #{beatmap_id} with #{mods}"
-                Logger.error inspect body
-                pp_state
-            end
           {:error, error} ->
-            Logger.error "Unable to calculate pp for #{beatmap_id} with #{mods}"
+            Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
             Logger.error inspect error
-            pp_state
-        end
 
-      s ->
-        Logger.error "Received beatmap pp request, but was unable to parse the beatmap id to an int"
-        Logger.error inspect s
-        pp_state
+          _ ->
+            Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
+            Logger.error inspect body
+        end
+      {:error, error} ->
+        Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
+        Logger.error inspect error
     end
   end
 end
-
