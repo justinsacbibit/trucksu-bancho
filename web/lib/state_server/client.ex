@@ -979,9 +979,9 @@ defmodule Game.StateServer.Client do
   def part_match(user_id) do
     case @client |> Exredis.query(["HGET", user_key(user_id), "match_id"]) do
       :undefined ->
-        Logger.error "#{Color.username(user_id)} tried to part a match, but appears to be offline"
+        Logger.error "#{user_id} tried to part a match, but appears to be offline"
       "-1" ->
-        Logger.error "#{Color.username(user_id)} tried to part a match, but appears to not be in a match"
+        Logger.error "#{user_id} tried to part a match, but appears to not be in a match"
       match_id ->
         {match_id, _} = Integer.parse(match_id)
         match_user_left(match_id, user_id)
@@ -1006,10 +1006,10 @@ defmodule Game.StateServer.Client do
     case @client |> Exredis.query(query) do
       :undefined ->
         # TODO: Pass in user and use username
-        Logger.error "#{Color.username(user_id)} attempted to leave match, but appears to be offline"
+        Logger.error "#{user_id} attempted to leave match, but appears to be offline"
       "-1" ->
         # TODO: Pass in user and use username
-        Logger.error "#{Color.username(user_id)} attempted to leave match, but appears to not be in a match"
+        Logger.error "#{user_id} attempted to leave match, but appears to not be in a match"
       slot_id ->
         {slot_id, _} = Integer.parse(slot_id)
 
@@ -1029,7 +1029,7 @@ defmodule Game.StateServer.Client do
         @client |> Exredis.query_pipe([query1, query2, query3])
 
         queries = for slot_id <- 0..15 do
-          ["HMGET", match_slot_key(match_id, user_id), "slot_id", "user_id"]
+          ["HMGET", match_slot_key(match_id, slot_id), "slot_id", "user_id"]
         end
         ret = @client |> Exredis.query_pipe(queries)
         players = for [slot_id, slot_user_id] <- ret, slot_user_id != "-1" do
