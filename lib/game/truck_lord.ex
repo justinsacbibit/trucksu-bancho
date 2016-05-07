@@ -66,7 +66,7 @@ defmodule Game.TruckLord do
 
             case file_md5 do
               "" ->
-                message = "PP calculation currently does not work from song select. Make sure you're playing/watching a map"
+                message = "PP calculation currently does not work from song select (or when you're afk). Make sure you're playing/watching a map"
                 Logger.warn "Sending message to #{user.username}: #{message}"
                 packet = Packet.send_message(@username, message, user.username, @user_id)
                 StateServer.Client.enqueue(user.id, packet)
@@ -111,7 +111,7 @@ defmodule Game.TruckLord do
       {"PF", 16384},
     ]
 
-    mod_strs = for {mod_str, mod_val} <- mod_map, mods &&& mod_val > 0 do
+    mod_strs = for {mod_str, mod_val} <- mod_map, (mods &&& mod_val) > 0 do
       mod_str
     end
 
@@ -129,11 +129,11 @@ defmodule Game.TruckLord do
 
             mod_string = mods_to_string(mods)
             mod_string = if mod_string != "" do
-              " (mods: +#{{mod_string}})"
+              " (mods: +#{mod_string})"
             else
               ""
             end
-            message = "#{pp}pp for #{artist} - #{title} (#{creator}) [#{version}] (#{stars}*)#{mod_string}"
+            message = "#{pp}pp for SS #{artist} - #{title} (#{creator}) [#{version}] (#{((stars * 100) |> Float.round) / 100}*)#{mod_string}"
             Logger.warn "Sending message to #{user.username}: #{message}"
             packet = Packet.send_message(@username, message, user.username, @user_id)
             StateServer.Client.enqueue(user.id, packet)
