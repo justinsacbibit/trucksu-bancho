@@ -552,7 +552,7 @@ defmodule Game.GameController do
     Packet.silence_end_time(0)
     <> Packet.user_id(user.id)
     <> Packet.protocol_version
-    <> Packet.user_supporter_gmt(false, false)
+    <> Packet.user_supporter_gmt(true, false)
     <> user_panel_packet
     <> user_stats_packet
     <> Packet.channel_info_end
