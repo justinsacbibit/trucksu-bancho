@@ -1278,6 +1278,7 @@ defmodule Game.StateServer.Client do
 
         # TODO: Error checking
         @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_ready}"])
+        send_multi_update(match_id)
     end
   end
 
