@@ -170,12 +170,16 @@ defmodule Game.StateServer.Client do
     ])
 
     part_match(user_id)
-
+    remove_spectators(user_id)
     stop_spectating(user_id, false)
 
     enqueue_all(logout_packet)
 
     remove_user_from_channels(user_id)
+  end
+
+  defp remove_spectators(user_id) do
+    # TODO
   end
 
   @doc """
