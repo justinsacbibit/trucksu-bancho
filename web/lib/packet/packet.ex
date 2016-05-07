@@ -349,4 +349,108 @@ defmodule Game.Packet do
   def no_song_spectator(user_id) do
     new(Ids.server_spectatorCantSpectate, [{user_id, :int32}])
   end
+
+  ## Multiplayer packets
+
+  def create_match(data) do
+    new(Ids.server_newMatch, mp_packet_data(data))
+  end
+
+  def update_match(data) do
+    new(Ids.server_updateMatch, mp_packet_data(data))
+  end
+
+  def match_start(data) do
+    new(Ids.server_matchStart, mp_packet_data(data))
+  end
+
+  def dispose_match(match_id) do
+    new(Ids.server_disposeMatch, [{match_id, :uint16}])
+  end
+
+  def match_join_success(data) do
+    new(Ids.server_matchJoinSuccess, mp_packet_data(data))
+  end
+
+  def match_join_fail(data) do
+    new(Ids.server_matchJoinFail, mp_packet_data(data))
+  end
+
+  def change_match_password(new_password) do
+    new(Ids.server_matchChangePassword, [{new_password, :string}])
+  end
+
+  def all_players_loaded() do
+    new(Ids.server_matchAllPlayersLoaded, [])
+  end
+
+  def player_skipped(user_id) do
+    new(Ids.server_matchPlayerSkipped, [{user_id, :int32}])
+  end
+
+  def all_players_skipped() do
+    new(Ids.server_matchSkip, [])
+  end
+
+  def match_frames(slot_id, data) do
+    # First, split the data. Separate out the first 4 bytes
+    <<first::binary-size(32), rest::binary>> = data
+
+    # The slot id goes between the data sections
+    new(Ids.server_matchScoreUpdate, [{first, :bytes}, {slot_id, :int8}, {rest, :bytes}])
+  end
+
+  def match_complete() do
+    new(Ids.server_matchComplete, [])
+  end
+
+  def player_failed(slot_id) do
+    new(Ids.server_matchPlayerFailed, [{slot_id, :uint32}])
+  end
+
+  def match_transfer_host() do
+    # TODO: Automatic transfer host when host leaves
+    new(Ids.server_matchTransferHost, [])
+  end
+
+  # Converts a keyword list of data into the proper packet format
+  defp mp_packet_data(data) do
+    packed_data = [
+      {data[:match_id], :uint16},
+      {if data[:in_progress] do 1 else 0 end, :int8},
+      {0, :int8},
+      {data[:mods], :uint32},
+      {data[:match_name], :string},
+      {data[:match_password], :string},
+      {data[:beatmap_name], :string},
+      {data[:beatmap_id], :uint32},
+      {data[:beatmap_md5], :string},
+    ]
+
+    packed_slot_data = (for slot_data <- data[:slots] do
+      {slot_data[:status], :int8}
+    end) ++ (for slot_data <- data[:slots] do
+      {slot_data[:team], :int8}
+    end) ++ (for slot_data <- data[:slots], slot_data[:user_id] != -1 do
+      {slot_data[:user_id], :uint32}
+    end)
+
+    packed_data = packed_data ++ packed_slot_data
+
+    packed_data = packed_data ++ [
+      {data[:host_user_id], :int32},
+      {data[:game_mode], :int8},
+      {data[:match_scoring_type], :int8},
+      {data[:match_team_type], :int8},
+      {data[:match_mod_mode], :int8},
+    ]
+
+    packed_data = packed_data ++ (for slot_data <- data[:slots], data[:match_mod_mode] == StateServer.Client.match_mod_mode_free_mod do
+      {slot_data[:mods], :uint32}
+    end)
+
+    packed_data = packed_data ++ [{data[:seed], :uint32}]
+
+    packed_data
+  end
 end

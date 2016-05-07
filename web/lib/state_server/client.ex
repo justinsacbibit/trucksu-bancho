@@ -5,12 +5,46 @@ defmodule Game.StateServer.Client do
   require Logger
   use Timex
   alias Game.{Packet, TruckLord}
+  use Bitwise
   alias Game.Utils.Color
   alias Trucksu.{Repo, User}
 
   @client :redis
   @default_channels ["#osu", "#announce"]
-  @other_channels []
+  @other_channels ["#lobby"] # this does nothing right now
+  @lobby_key "mp_lobby"
+
+  # Determines the amount of time to ignore logout requests after logging in.
+  @recently_logged_in_threshold 10 # seconds
+
+  ## match scoring types
+  @match_scoring_type_score 0
+  @match_scoring_type_accuracy 1
+  @match_scoring_type_combo 2
+
+  ## match team types
+  @match_team_type_head_to_head 0
+  @match_team_type_tag_coop 1
+  @match_team_type_team_vs 2
+  @match_team_type_tag_team_vs 3
+
+  ## match mod modes
+  @match_mod_mode_normal 0
+  @match_mod_mode_free_mod 1
+
+  ## slot statuses
+  @slot_status_free 1
+  @slot_status_locked 2
+  @slot_status_not_ready 4
+  @slot_status_ready 8
+  @slot_status_no_map 16
+  @slot_status_playing 32
+  @slot_status_occupied 124
+  @slot_status_playing_quit 128
+
+  def match_mod_mode_free_mod(), do: @match_mod_mode_free_mod
+  def slot_status_free(), do: @slot_status_free
+  def slot_status_locked(), do: @slot_status_locked
 
   # Determines the amount of time to ignore logout requests after logging in.
   @recently_logged_in_threshold 10 # seconds
@@ -20,6 +54,7 @@ defmodule Game.StateServer.Client do
   OTP application callback.
   """
   def initialize() do
+    next_match_id() # Initialize next_match_id to 0 if necessary
     Logger.warn Color.color("Initialized Redis state", IO.ANSI.green)
   end
 
@@ -94,6 +129,8 @@ defmodule Game.StateServer.Client do
       "lat", "#{lat}",
       "lon", "#{lon}",
       "country_id", "#{country_id}",
+      "match_id", "-1",
+      "slot_id", "-1",
     ]
 
     query2 = ["HSET", "users", user.username, user.id]
@@ -132,7 +169,10 @@ defmodule Game.StateServer.Client do
       ["DEL", user_key(user_id)],
       ["HDEL", "users", username],
       ["DEL", user_queue_key(user_id)],
+      part_lobby_query(user_id),
     ])
+
+    part_match(user_id)
 
     stop_spectating(user_id, false)
 
@@ -160,6 +200,32 @@ defmodule Game.StateServer.Client do
   #"""
   #def create_channel(server \\ @name, channel) do
   #end
+
+  @doc """
+  Sends a message to the appropriate #multiplayer channel.
+  """
+  def send_multiplayer_message(packet, user) do
+    match_id = @client |> Exredis.query(["HGET", user_key(user.id), "match_id"])
+
+    case match_id do
+      :undefined ->
+        Logger.error "#{Color.username(user.username)} attempted to send a message to #multiplayer, but appears to be offline"
+      "-1" ->
+        Logger.error "#{Color.username(user.username)} attempted to send a message to #multiplayer, but appears to not be in a match"
+      _ ->
+
+        match_users = @client |> Exredis.query(["SMEMBERS", match_users_key(match_id)])
+
+        queries = Enum.filter_map(match_users, fn(match_user_id) ->
+          {match_user_id, _} = Integer.parse(match_user_id)
+          match_user_id != user.id
+        end, fn(match_user_id) ->
+          ["RPUSH", user_queue_key(match_user_id), packet]
+        end)
+
+        @client |> Exredis.query_pipe(queries)
+    end
+  end
 
   @doc """
   Sends a message to the appropriate #spectator channel.
@@ -499,6 +565,912 @@ defmodule Game.StateServer.Client do
     end
   end
 
+  @doc """
+  Adds a player into the multiplayer lobby.
+  """
+  def join_lobby(user_id) do
+
+    # TODO: Pipelining
+
+    @client |> Exredis.query(["SADD", @lobby_key, user_id])
+
+    # TODO: Send a createMatch packet for each match in the lobby
+
+    packets = [<<>>]
+    packet = Enum.reduce(packets, <<>>, &<>/2)
+    enqueue(user_id, packet)
+  end
+
+  @doc """
+  Removes a player from the multiplayer lobby.
+  """
+  def part_lobby(user_id) do
+    @client |> Exredis.query(part_lobby_query(user_id))
+  end
+
+  # TODO: Extract into query builder
+  defp part_lobby_query(user_id), do: ["SREM", @lobby_key, user_id]
+
+  @doc """
+  Creates a multiplayer match.
+  """
+  def create_match(user, data) do
+    match_id = next_match_id()
+    {match_id, _} = Integer.parse(match_id)
+
+    query1 = [
+      "HMSET",
+      match_key(match_id),
+      "in_progress", "false",
+      "mods", "0",
+      "match_name", data[:match_name],
+      "match_password", data[:match_password],
+      "beatmap_id", "#{data[:beatmap_id]}",
+      "beatmap_name", data[:beatmap_name],
+      "beatmap_md5", data[:beatmap_md5],
+      "host_user_id", "#{user.id}",
+      "game_mode", "#{data[:game_mode]}",
+      "match_scoring_type", "#{@match_scoring_type_score}",
+      "match_team_type", "#{@match_team_type_head_to_head}",
+      "match_mod_mode", "#{@match_mod_mode_normal}",
+      "seed", "0",
+    ]
+
+    slot_queries = for slot_id <- 0..15, do: [
+      "HMSET",
+      match_slot_key(match_id, slot_id),
+      "slot_id", "#{slot_id}",
+      "status", "#{@slot_status_free}",
+      "team", "0",
+      "user_id", "-1",
+      "mods", "0",
+      "loaded", "false",
+      "skip", "false",
+      "complete", "false",
+    ]
+
+    @client |> Exredis.query_pipe([query1 | slot_queries])
+
+    # TODO: Clear spectators
+
+    stop_spectating(user.id, false)
+
+    join_match(user, match_id, data[:match_password])
+
+    set_match_host(match_id, user.id)
+
+    lobby_user_ids = @client |> Exredis.query(["SMEMBERS", @lobby_key])
+    match = match_data(match_id)
+    for lobby_user_id <- lobby_user_ids, do: enqueue(lobby_user_id, Packet.create_match(match))
+  end
+
+  defp match_data(match_id) do
+    query1 = [
+      "HMGET",
+      match_key(match_id),
+      "in_progress",
+      "mods",
+      "match_name",
+      "match_password",
+      "beatmap_id",
+      "beatmap_name",
+      "beatmap_md5",
+      "host_user_id",
+      "game_mode",
+      "match_scoring_type",
+      "match_team_type",
+      "match_mod_mode",
+      "seed",
+    ]
+
+    slot_queries = for slot_id <- 0..15, do: [
+      "HMGET",
+      match_slot_key(match_id, slot_id),
+      "slot_id",
+      "status",
+      "team",
+      "user_id",
+      "mods",
+      "loaded",
+      "skip",
+      "complete",
+    ]
+
+    [
+      [
+        in_progress,
+        mods,
+        match_name,
+        match_password,
+        beatmap_id,
+        beatmap_name,
+        beatmap_md5,
+        host_user_id,
+        game_mode,
+        match_scoring_type,
+        match_team_type,
+        match_mod_mode,
+        seed,
+      ] |
+      slot_data,
+    ] = @client |> Exredis.query_pipe([query1 | slot_queries])
+
+    in_progress = string_to_bool(in_progress)
+    {mods, _} = Integer.parse(mods)
+    {beatmap_id, _} = Integer.parse(beatmap_id)
+    {host_user_id, _} = Integer.parse(host_user_id)
+    {game_mode, _} = Integer.parse(game_mode)
+    {match_scoring_type, _} = Integer.parse(match_scoring_type)
+    {match_team_type, _} = Integer.parse(match_team_type)
+    {match_mod_mode, _} = Integer.parse(match_mod_mode)
+    {seed, _} = Integer.parse(seed)
+
+    match = [
+      match_id: match_id,
+      in_progress: in_progress,
+      mods: mods,
+      match_name: match_name,
+      match_password: match_password,
+      beatmap_id: beatmap_id,
+      beatmap_name: beatmap_name,
+      beatmap_md5: beatmap_md5,
+      host_user_id: host_user_id,
+      game_mode: game_mode,
+      match_scoring_type: match_scoring_type,
+      match_team_type: match_team_type,
+      match_mod_mode: match_mod_mode,
+      seed: seed,
+    ]
+
+    slots = for slot <- slot_data do
+      [
+        slot_id,
+        status,
+        team,
+        user_id,
+        mods,
+        loaded,
+        skip,
+        complete,
+      ] = slot
+
+      {slot_id, _} = Integer.parse(slot_id)
+      {status, _} = Integer.parse(status)
+      {team, _} = Integer.parse(team)
+      {user_id, _} = Integer.parse(user_id)
+      {mods, _} = Integer.parse(mods)
+      loaded = string_to_bool(loaded)
+      skip = string_to_bool(skip)
+      complete = string_to_bool(complete)
+
+      [
+        slot_id: slot_id,
+        status: status,
+        team: team,
+        user_id: user_id,
+        mods: mods,
+        loaded: loaded,
+        skip: skip,
+        complete: complete,
+      ]
+    end
+
+    match = [{:slots, slots} | match]
+
+    match
+  end
+
+  defp string_to_bool(str) do
+    case str do
+      "true" -> true
+      "false" -> false
+      _ ->
+        Logger.error "Unable to convert string \"#{str}\" to a bool"
+        false
+    end
+  end
+
+  @doc """
+  """
+  def change_match_settings(user, data) do
+    match_name = data[:match_name]
+    in_progress = data[:in_progress]
+    beatmap_name = data[:beatmap_name]
+    beatmap_id = data[:beatmap_id]
+    host_user_id = data[:host_user_id]
+    game_mode = data[:game_mode]
+    mods = data[:mods]
+    beatmap_md5 = data[:beatmap_md5]
+    match_scoring_type = data[:scoring_type]
+    match_team_type = data[:team_type]
+    match_mod_mode = data[:free_mods]
+
+    in_progress = case in_progress do
+      0 ->
+        "false"
+      1 ->
+        "true"
+      _ ->
+        Logger.error "#{Color.username(user.username)} attempted to update match settings, but provided an invalid in_progress value: #{in_progress}"
+        "false"
+    end
+
+    # TODO: Compare data[:match_id] and the user's current match id
+    match_id = data[:match_id]
+
+    [old_mods, old_beatmap_md5] = @client |> Exredis.query([
+      "HMGET", match_key(match_id),
+      "mods", "beatmap_md5",
+    ])
+
+    case old_mods do
+      :undefined ->
+        Logger.error "#{Color.username(user.username)} attempted to update match settings, but the match appears to not exist"
+      _ ->
+        {old_mods, _} = Integer.parse(old_mods)
+
+        query1 = [
+          "HMSET", match_key(match_id),
+          "match_name", match_name,
+          "in_progress", in_progress,
+          "beatmap_name", beatmap_name,
+          "beatmap_id", beatmap_id,
+          "host_user_id", host_user_id,
+          "game_mode", game_mode,
+          "mods", mods,
+          "beatmap_md5", beatmap_md5,
+          "match_scoring_type", match_scoring_type,
+          "match_team_type", match_team_type,
+          "match_mod_mode", match_mod_mode,
+        ]
+
+        queries = [query1]
+
+        # Reset ready if needed
+        queries = if old_mods != mods or old_beatmap_md5 != beatmap_md5 do
+          slot_queries =
+          for slot_id <- generate_slot_ids(),
+              slot_status = @client |> Exredis.query(["HGET", match_slot_key(match_id, slot_id), "status"]),
+              slot_status == "8" do
+            ["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_not_ready}"]
+          end
+
+          queries ++ slot_queries
+        else
+          queries
+        end
+
+        # Reset mods if needed
+        queries = if match_mod_mode == @match_mod_mode_normal do
+          mod_queries = for slot_id <- generate_slot_ids() do
+            ["HSET", match_slot_key(match_id, slot_id), "mods", "0"]
+          end
+
+          queries ++ mod_queries
+        else
+          # TODO: Possibly reset match mods if freemod?
+          queries
+        end
+
+        # TODO: Teams
+
+        # TODO: Tag coop
+
+        @client |> Exredis.query_pipe(queries)
+
+        send_multi_update(match_id)
+    end
+  end
+
+  defp generate_slot_ids() do
+    0..15
+  end
+
+  @doc """
+  Changes a player's slot in a multiplayer match.
+  """
+  def change_slot(user, slot_id) do
+    # TODO: Conflict resolution
+
+    current_slot_id = @client |> Exredis.query([
+      "HGET", "#{user_key(user.id)}",
+      "slot_id",
+    ])
+
+    case current_slot_id do
+      :undefined ->
+        Logger.error "#{Color.username(user.username)} attempted to change their slot, but appears to be offline"
+      "-1" ->
+        Logger.error "#{Color.username(user.username)} attempted to change their slot, but doesn't seem to currently be in a slot"
+      _ ->
+        # (Unsafely?) assume that match_id will be well-defined
+        match_id = @client |> Exredis.query([
+          "HGET", "#{user_key(user.id)}",
+          "match_id",
+        ])
+        {match_id, _} = Integer.parse(match_id)
+
+        case @client |> Exredis.query(["HGET", match_slot_key(match_id, slot_id), "status"]) do
+          :undefined ->
+            Logger.error "#{Color.username(user.username)} attempted to change their slot, but the match doesn't appear to exist"
+          "1" -> # @slot_status_free
+            # Copy over current slot data
+            [
+              status,
+              team,
+              user_id,
+              mods,
+              loaded,
+              skip,
+              complete,
+            ] = @client |> Exredis.query([
+              "HMGET", match_slot_key(match_id, current_slot_id),
+              "status",
+              "team",
+              "user_id",
+              "mods",
+              "loaded",
+              "skip",
+              "complete",
+            ])
+
+            query1 = [
+              "HMSET", match_slot_key(match_id, slot_id),
+              "status", status,
+              "team", team,
+              "user_id", user_id,
+              "mods", mods,
+              "loaded", loaded,
+              "skip", skip,
+              "complete", complete,
+            ]
+            query2 = set_slot_to_free_query(match_id, current_slot_id)
+            query3 = [
+              "HSET", user_key(user.id),
+              "slot_id", "#{slot_id}",
+            ]
+
+            @client |> Exredis.query_pipe([query1, query2, query3])
+
+            send_multi_update(match_id)
+          _ ->
+            Logger.error "#{Color.username(user.username)} attempted to change their slot, but the slot appears to be taken or locked"
+        end
+    end
+  end
+
+  @doc """
+  Locks a slot in a multiplayer match.
+  """
+  def lock_match_slot(user, slot_id) do
+    # TODO: Eliminate any data races
+
+    case @client |> Exredis.query(["HGET", user_key(user.id), "match_id"]) do
+      :undefined ->
+        Logger.error "#{Color.username(user.username)} tried to lock slot #{slot_id}, but appears to be offline"
+      "-1" ->
+        Logger.error "#{Color.username(user.username)} tried to lock slot #{slot_id}, but appears to not be in a match"
+      match_id ->
+        {match_id, _} = Integer.parse(match_id)
+
+        slot_status = @client |> Exredis.query(["HGET", match_slot_key(match_id, slot_id), "status"])
+        case slot_status do
+          :undefined ->
+            Logger.error "#{Color.username(user.username)} tried to lock slot #{slot_id}, but the match appears to not exist"
+          "1" ->
+            Logger.warn "#{Color.username(user.username)} locked slot #{match_id}:#{slot_id}"
+            @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_locked}"])
+            send_multi_update(match_id)
+          "2" ->
+            Logger.warn "#{Color.username(user.username)} unlocked slot #{match_id}:#{slot_id}"
+            @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_free}"])
+            send_multi_update(match_id)
+          _ ->
+            Logger.error "#{Color.username(user.username)} tried to lock slot #{slot_id}, but the slot appears to be taken"
+        end
+    end
+  end
+
+  defp send_multi_update(match_id) do
+    match_user_ids = @client |> Exredis.query(["SMEMBERS", match_users_key(match_id)])
+
+    match = match_data(match_id)
+    for match_user_id <- match_user_ids do
+      enqueue(match_user_id, Packet.update_match(match))
+    end
+  end
+
+  @doc """
+  Removes a user from a multiplayer match.
+  """
+  def part_match(user_id) do
+    case @client |> Exredis.query(["HGET", user_key(user_id), "match_id"]) do
+      :undefined ->
+        Logger.error "#{user_id} tried to part a match, but appears to be offline"
+      "-1" ->
+        Logger.error "#{user_id} tried to part a match, but appears to not be in a match"
+      match_id ->
+        {match_id, _} = Integer.parse(match_id)
+        match_user_left(match_id, user_id)
+    end
+  end
+
+  defp set_slot_to_free_query(match_id, slot_id) do
+    [
+      "HMSET", match_slot_key(match_id, slot_id),
+      "status", "#{@slot_status_free}",
+      "team", "0",
+      "user_id", "-1",
+      "mods", "0",
+      "loaded", "false",
+      "skip", "false",
+      "complete", "false",
+    ]
+  end
+
+  defp match_user_left(match_id, user_id) do
+    query = ["HGET", user_key(user_id), "slot_id"]
+    case @client |> Exredis.query(query) do
+      :undefined ->
+        # TODO: Pass in user and use username
+        Logger.error "#{user_id} attempted to leave match, but appears to be offline"
+      "-1" ->
+        # TODO: Pass in user and use username
+        Logger.error "#{user_id} attempted to leave match, but appears to not be in a match"
+      slot_id ->
+        {slot_id, _} = Integer.parse(slot_id)
+
+        # set slot to free
+        query1 = set_slot_to_free_query(match_id, slot_id)
+        # remove from set of users in the match
+        query2 = [
+          "SREM", match_users_key(match_id),
+          "#{user_id}",
+        ]
+        # update the leaver's match id to -1
+        query3 = [
+          "HMSET", user_key(user_id),
+          "match_id", "-1",
+          "slot_id", "-1",
+        ]
+        @client |> Exredis.query_pipe([query1, query2, query3])
+
+        queries = for slot_id <- 0..15 do
+          ["HMGET", match_slot_key(match_id, slot_id), "slot_id", "user_id"]
+        end
+        ret = @client |> Exredis.query_pipe(queries)
+        players = for [slot_id, slot_user_id] <- ret, slot_user_id != "-1" do
+          {slot_user_id, _} = Integer.parse(slot_user_id)
+          slot_user_id
+        end
+        case players do
+          [] ->
+            dispose_match(match_id)
+          [first_player_id | _] ->
+            host_user_id = @client |> Exredis.query(["HGET", match_key(match_id), "host_user_id"])
+            {host_user_id, _} = Integer.parse(host_user_id)
+            if user_id == host_user_id do
+              set_match_host(match_id, first_player_id)
+            end
+            send_multi_update(match_id)
+        end
+        enqueue(user_id, Packet.channel_kicked("#multiplayer"))
+    end
+  end
+
+  defp dispose_match(match_id) do
+    keys_to_delete = [match_key(match_id) | (for slot_id <- 0..15 do
+        match_slot_key(match_id, slot_id)
+    end)]
+
+    @client |> Exredis.query(["DEL" | keys_to_delete])
+  end
+
+  defp get_user_slot_id(match_id, user_id) do
+    queries = for slot_id <- 0..15 do
+      ["HMGET", match_slot_key(match_id, slot_id ), "slot_id", "user_id"]
+    end
+    ret = @client |> Exredis.query_pipe(queries)
+
+    found = for [slot_id, slot_user_id] <- ret, slot_user_id != :undefined and elem(Integer.parse(slot_user_id), 0) == user_id do
+      slot_id
+    end
+
+    case found do
+      [slot_id] ->
+        {slot_id, _} = Integer.parse(slot_id)
+        slot_id
+      [] ->
+        Logger.error "Couldn't find #{user_id} in #{match_id} slots: #{inspect ret}"
+        nil
+      [slot_id | _] ->
+        Logger.error "Found multiple instances of the same user id in match slots"
+        # TODO: Correct the state
+        {slot_id, _} = Integer.parse(slot_id)
+        slot_id
+    end
+  end
+
+  @doc """
+  Joins a user into a multiplayer match.
+  """
+  def join_match(user, match_id, password) do
+    # TODO: Leave other matches
+    # TODO: Stop spectating
+
+    # TODO: Make sure the match exists
+
+    # TODO: Check password
+
+    match = match_data(match_id)
+    free_slot = Enum.find(match[:slots], fn(slot) -> slot[:status] == @slot_status_free end)
+    if not is_nil(free_slot) do
+      query1 = [
+        "HMSET",
+        match_slot_key(match_id, "#{free_slot[:slot_id]}"),
+        "status", "#{@slot_status_not_ready}",
+        "team", "0",
+        "user_id", "#{user.id}",
+        "mods", "0",
+      ]
+      query2 = [
+        "HMSET",
+        user_key(user.id),
+        "match_id", "#{match_id}",
+        "slot_id", "#{free_slot[:slot_id]}",
+      ]
+      query3 = [
+        "SADD", match_users_key(match_id),
+        "#{user.id}",
+      ]
+      @client |> Exredis.query_pipe([query1, query2, query3])
+
+      # TODO: Send update to users
+
+      enqueue(user.id, Packet.match_join_success(match_data(match_id)))
+      enqueue(user.id, Packet.channel_join_success("#multiplayer"))
+
+      send_multi_update(match_id)
+
+      true
+    else
+      Logger.error "#{user.username} couldn't join #{match_id}: no free slot"
+      false
+    end
+  end
+
+  @doc """
+  Changes a player's mods in a multiplayer match.
+  """
+  def change_mods(user, mods) do
+    query = ["HMGET", user_key(user.id), "match_id", "slot_id"]
+    case @client |> Exredis.query(query) do
+      [:undefined, :undefined] ->
+        Logger.error "#{Color.username(user.username)} attempted to change their multiplayer mods, but appears to be offline"
+      ["-1", "-1"] ->
+        Logger.error "#{Color.username(user.username)} attempted to change their multiplayer mods, but appears to not be in a match"
+      [match_id, slot_id] ->
+        {match_id, _} = Integer.parse(match_id)
+        {slot_id, _} = Integer.parse(slot_id)
+
+        [match_mod_mode, host_user_id] = @client |> Exredis.query([
+          "HMGET", match_key(match_id),
+          "match_mod_mode", "host_user_id",
+        ])
+        {match_mod_mode, _} = Integer.parse(match_mod_mode)
+        {host_user_id, _} = Integer.parse(host_user_id)
+
+        change_own_mod_query = [
+          "HSET",
+          match_slot_key(match_id, slot_id),
+          "mods", "#{mods}",
+        ]
+
+        queries = if host_user_id == user.id do
+          match_mods = if match_mod_mode == @match_mod_mode_free_mod do
+            # DT, HT, NC
+            mods &&& (64 ||| 256 ||| 512)
+          else
+            mods
+          end
+          query = ["HSET", match_key(match_id), "mods", "#{match_mods}"]
+          [query, change_own_mod_query]
+        else
+          if match_mod_mode == @match_mod_mode_free_mod do
+            [change_own_mod_query]
+          else
+            []
+          end
+        end
+
+        @client |> Exredis.query_pipe(queries)
+
+        send_multi_update(match_id)
+    end
+  end
+
+  def match_skip_request(user) do
+    [match_id, slot_id] = @client |> Exredis.query([
+      "HMGET", user_key(user.id),
+      "match_id", "slot_id",
+    ])
+
+    case match_id do
+      :undefined ->
+        Logger.error "#{Color.username(user.username)} attempted to skip during a match, but appears to be offline"
+      "-1" ->
+        Logger.error "#{Color.username(user.username)} attempted to skip during a match, but appears to not be in a match"
+      _ ->
+        {match_id, _} = Integer.parse(match_id)
+        {slot_id, _} = Integer.parse(slot_id)
+
+        @client |> Exredis.query([
+          "HSET", match_slot_key(match_id, slot_id),
+          "skip", "true",
+        ])
+
+        queries = for slot_id <- generate_slot_ids() do
+          ["HMGET", match_slot_key(match_id, slot_id), "skip", "status", "user_id"]
+        end
+
+        # send skip packet to all playing users
+        for [_, "32", user_id] <- @client |> Exredis.query_pipe(queries) do
+          {user_id, _} = Integer.parse(user_id)
+          enqueue(user_id, Packet.player_skipped(user_id))
+        end
+
+        # count players who haven't skipped and are playing
+        yet_to_skip = for ["false", "32", _] <- @client |> Exredis.query_pipe(queries), do: :ok
+        if length(yet_to_skip) == 0 do
+          for [_, "32", user_id] <- @client |> Exredis.query_pipe(queries) do
+            {user_id, _} = Integer.parse(user_id)
+            enqueue(user_id, Packet.all_players_skipped())
+          end
+        end
+    end
+  end
+
+  def match_start(user) do
+    # TODO: Error checking
+
+    match_id = @client |> Exredis.query(["HGET", user_key(user.id), "match_id"])
+
+    case match_id do
+      :undefined ->
+        Logger.error "#{Color.username(user.username)} attempted to start a match, but appears to be offline"
+      "-1" ->
+        Logger.error "#{Color.username(user.username)} attempted to start a match, but appears to not be in a match"
+      _ ->
+        {match_id, _} = Integer.parse(match_id)
+
+        @client |> Exredis.query(["HSET", match_key(match_id), "in_progress", "true"])
+
+        queries = for slot_id <- generate_slot_ids() do
+          ["HMGET", match_slot_key(match_id, slot_id), "slot_id", "status", "user_id"]
+        end
+
+        update_queries = for [slot_id, "8", _] <- @client |> Exredis.query_pipe(queries) do
+          # ready players
+          {slot_id, _} = Integer.parse(slot_id)
+          [
+            "HMSET", match_slot_key(match_id, slot_id),
+            "status", "#{@slot_status_playing}",
+            "loaded", "false",
+            "skip", "false",
+            "complete", "false",
+          ]
+        end
+
+        for [_, "32", user_id] <- @client |> Exredis.query_pipe(queries) do
+          {user_id, _} = Integer.parse(user_id)
+          # TODO: Pipelining
+          enqueue(user_id, Packet.match_start(match_data(match_id)))
+        end
+
+        send_multi_update(match_id)
+    end
+
+  end
+
+  def match_ready(user) do
+    query = ["HMGET", user_key(user.id), "match_id", "slot_id"]
+    case @client |> Exredis.query(query) do
+      [:undefined, :undefined] ->
+        Logger.error "#{Color.username(user.username)} attempted to ready for match, but appears to be offline"
+      ["-1", "-1"] ->
+        Logger.error "#{Color.username(user.username)} attempted to ready for match, but appears to not be in a match"
+      [match_id, slot_id] ->
+        {match_id, _} = Integer.parse(match_id)
+        {slot_id, _} = Integer.parse(slot_id)
+
+        # TODO: Error checking
+        @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_ready}"])
+    end
+  end
+
+  def match_not_ready(user) do
+    query = ["HMGET", user_key(user.id), "match_id", "slot_id"]
+    case @client |> Exredis.query(query) do
+      [:undefined, :undefined] ->
+        Logger.error "#{Color.username(user.username)} attempted to ready for match, but appears to be offline"
+      ["-1", "-1"] ->
+        Logger.error "#{Color.username(user.username)} attempted to ready for match, but appears to not be in a match"
+      [match_id, slot_id] ->
+        {match_id, _} = Integer.parse(match_id)
+        {slot_id, _} = Integer.parse(slot_id)
+
+        # TODO: Error checking
+        @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_not_ready}"])
+    end
+  end
+
+  def match_frames(user, data) do
+    query = ["HMGET", user_key(user.id), "match_id", "slot_id"]
+    case @client |> Exredis.query(query) do
+      [:undefined, :undefined] ->
+        Logger.error "#{Color.username(user.username)} attempted to send match frames, but appears to be offline"
+      ["-1", "-1"] ->
+        Logger.error "#{Color.username(user.username)} attempted to send match frames, but appears to not be in a match"
+      [match_id, slot_id] ->
+        {match_id, _} = Integer.parse(match_id)
+        {slot_id, _} = Integer.parse(slot_id)
+
+        # TODO: Error checking
+
+        queries = for slot_id <- generate_slot_ids() do
+          ["HMGET", match_slot_key(match_id, slot_id), "status", "user_id"]
+        end
+        # Enqueue frames to whoever is playing
+        packet = Packet.match_frames(slot_id, data)
+        for ["32", user_id] <- @client |> Exredis.query_pipe(queries) do
+          {user_id, _} = Integer.parse(user_id)
+          # TODO: Pipeline
+          enqueue(user_id, packet)
+        end
+    end
+  end
+
+  def match_has_beatmap(user, has) do
+    query = ["HMGET", user_key(user.id), "match_id", "slot_id"]
+    case @client |> Exredis.query(query) do
+      [:undefined, :undefined] ->
+        Logger.error "#{Color.username(user.username)} attempted to send has beatmap #{has}, but appears to be offline"
+      ["-1", "-1"] ->
+        Logger.error "#{Color.username(user.username)} attempted to send has beatmap #{has}, but appears to not be in a match"
+      [match_id, slot_id] ->
+        {match_id, _} = Integer.parse(match_id)
+        {slot_id, _} = Integer.parse(slot_id)
+
+        # TODO: Error checking
+
+        query = ["HSET", match_slot_key(match_id, slot_id), "status", "#{if has do @slot_status_not_ready else @slot_status_no_map end}"]
+        @client |> Exredis.query(query)
+
+        send_multi_update(match_id)
+    end
+  end
+
+  def match_complete(user) do
+    query = ["HMGET", user_key(user.id), "match_id", "slot_id"]
+    case @client |> Exredis.query(query) do
+      [:undefined, :undefined] ->
+        Logger.error "#{Color.username(user.username)} attempted to complete match, but appears to be offline"
+      ["-1", "-1"] ->
+        Logger.error "#{Color.username(user.username)} attempted to complete match, but appears to not be in a match"
+      [match_id, slot_id] ->
+        {match_id, _} = Integer.parse(match_id)
+        {slot_id, _} = Integer.parse(slot_id)
+
+        # TODO: Error checking
+
+        query = [
+          "HSET",
+          match_slot_key(match_id, slot_id),
+          "complete", "true",
+        ]
+        @client |> Exredis.query(query)
+
+        queries = for slot_id <- generate_slot_ids() do
+          ["HMGET", match_slot_key(match_id, slot_id), "complete", "status"]
+        end
+
+        still_playing = for ["false", "32"] <- @client |> Exredis.query_pipe(queries), do: :ok
+
+        if length(still_playing) == 0 do
+          all_players_completed(match_id)
+        end
+    end
+  end
+
+  defp all_players_completed(match_id) do
+    update_queries = [["HSET", match_key(match_id), "in_progress", "true"]]
+
+    queries = for slot_id <- generate_slot_ids() do
+      ["HMGET", match_slot_key(match_id, slot_id), "slot_id", "status"]
+    end
+
+    update_queries = update_queries ++ for [slot_id, "32"] <- @client |> Exredis.query_pipe(queries) do
+      {slot_id, _} = Integer.parse(slot_id)
+      [
+        "HMSET", match_slot_key(match_id, slot_id),
+        "status", "#{@slot_status_not_ready}",
+        "loaded", "false",
+        "skip", "false",
+        "complete", "false",
+      ]
+    end
+
+    @client |> Exredis.query_pipe(update_queries)
+
+    queries = for slot_id <- generate_slot_ids() do
+      ["HGET", match_slot_key(match_id, slot_id), "user_id"]
+    end
+
+    for user_id <- @client |> Exredis.query_pipe(queries) do
+      # TODO: Pipeline
+      {user_id, _} = Integer.parse(user_id)
+      enqueue(user_id, Packet.match_complete())
+    end
+
+    send_multi_update(match_id)
+  end
+
+  defp all_players_loaded(match_id) do
+    queries = for slot_id <- generate_slot_ids() do
+      ["HMGET", match_slot_key(match_id, slot_id), "user_id", "status"]
+    end
+
+    for [user_id, "32"] <- @client |> Exredis.query_pipe(queries) do
+      # TODO: Pipeline
+      {user_id, _} = Integer.parse(user_id)
+      enqueue(user_id, Packet.all_players_loaded())
+    end
+  end
+
+  def match_load_complete(user) do
+    query = ["HMGET", user_key(user.id), "match_id", "slot_id"]
+    case @client |> Exredis.query(query) do
+      [:undefined, :undefined] ->
+        Logger.error "#{Color.username(user.username)} attempted to load into match, but appears to be offline"
+      ["-1", "-1"] ->
+        Logger.error "#{Color.username(user.username)} attempted to load into match, but appears to not be in a match"
+      [match_id, slot_id] ->
+        {match_id, _} = Integer.parse(match_id)
+        {slot_id, _} = Integer.parse(slot_id)
+
+        # TODO: Error checking
+
+        query = [
+          "HSET",
+          match_slot_key(match_id, slot_id),
+          "loaded", "true",
+        ]
+        @client |> Exredis.query(query)
+
+        queries = for slot_id <- generate_slot_ids() do
+          ["HMGET", match_slot_key(match_id, slot_id), "loaded", "status"]
+        end
+
+        still_loading = for ["false", "32"] <- @client |> Exredis.query_pipe(queries), do: :ok
+
+        if length(still_loading) == 0 do
+          all_players_loaded(match_id)
+        end
+    end
+  end
+
+  @doc """
+  Sets a user as the host of a multiplayer match.
+  """
+  def set_match_host(match_id, user_id) do
+    @client |> Exredis.query(["HSET", match_key(match_id), "host_user_id", "#{user_id}"])
+    enqueue(user_id, Packet.match_transfer_host())
+  end
+
+  defp next_match_id() do
+    @client |> Exredis.query(["INCR", "next_match_id"])
+  end
+
   ## Helper functions
 
   defp remove_user_from_channels(user_id) do
@@ -530,5 +1502,17 @@ defmodule Game.StateServer.Client do
   # Constructs the Redis key for a channel
   defp channel_key(channel) do
     "channel:#{channel}"
+  end
+
+  defp match_key(match_id) do
+    "match:#{match_id}"
+  end
+
+  defp match_slot_key(match_id, slot_id) do
+    "match.slot:#{match_id}:#{slot_id}"
+  end
+
+  defp match_users_key(match_id) do
+    "match.users:#{match_id}"
   end
 end
