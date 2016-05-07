@@ -308,8 +308,8 @@ defmodule Game.Packet do
     new(Ids.server_matchJoinSuccess, mp_packet_data(data))
   end
 
-  def match_join_fail(data) do
-    new(Ids.server_matchJoinFail, mp_packet_data(data))
+  def match_join_fail() do
+    new(Ids.server_matchJoinFail, [])
   end
 
   def change_match_password(new_password) do
