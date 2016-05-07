@@ -1116,7 +1116,7 @@ defmodule Game.StateServer.Client do
 
       # TODO: Send update to users
 
-      enqueue(user.id, Packet.match_join_success(match))
+      enqueue(user.id, Packet.match_join_success(match_data(match_id)))
       enqueue(user.id, Packet.channel_join_success("#multiplayer"))
 
       true
