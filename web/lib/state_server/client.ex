@@ -979,16 +979,12 @@ defmodule Game.StateServer.Client do
   def part_match(user_id) do
     case @client |> Exredis.query(["HGET", user_key(user_id), "match_id"]) do
       :undefined ->
-        :ok
+        Logger.error "#{Color.username(user_id)} tried to part a match, but appears to be offline"
       "-1" ->
-        :ok
+        Logger.error "#{Color.username(user_id)} tried to part a match, but appears to not be in a match"
       match_id ->
         {match_id, _} = Integer.parse(match_id)
-        if match_id == -1 do
-          :ok
-        else
-          match_user_left(match_id, user_id)
-        end
+        match_user_left(match_id, user_id)
     end
   end
 
@@ -1026,8 +1022,9 @@ defmodule Game.StateServer.Client do
         ]
         # update the leaver's match id to -1
         query3 = [
-          "HSET", user_key(user_id),
+          "HMSET", user_key(user_id),
           "match_id", "-1",
+          "slot_id", "-1",
         ]
         @client |> Exredis.query_pipe([query1, query2, query3])
 
@@ -1048,11 +1045,9 @@ defmodule Game.StateServer.Client do
             if user_id == host_user_id do
               set_match_host(match_id, first_player_id)
             end
-            # TODO: send update
-            :ok
+            send_multi_update(match_id)
         end
         enqueue(user_id, Packet.channel_kicked("#multiplayer"))
-        send_multi_update(match_id)
     end
   end
 

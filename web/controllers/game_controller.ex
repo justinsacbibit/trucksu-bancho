@@ -293,8 +293,7 @@ defmodule Game.GameController do
   defp handle_packet(31, data, user) do
     Logger.warn "#{Color.username(user.username)}!createMatch: #{inspect(data, limit: :infinity)}"
 
-    # TODO: Uncomment
-    # StateServer.Client.create_match(user, data)
+    StateServer.Client.create_match(user, data)
 
     <<>>
   end
