@@ -1119,6 +1119,8 @@ defmodule Game.StateServer.Client do
       enqueue(user.id, Packet.match_join_success(match_data(match_id)))
       enqueue(user.id, Packet.channel_join_success("#multiplayer"))
 
+      send_multi_update(match_id)
+
       true
     else
       Logger.error "#{user.username} couldn't join #{match_id}: no free slot"
