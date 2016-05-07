@@ -1003,12 +1003,17 @@ defmodule Game.StateServer.Client do
   end
 
   defp match_user_left(match_id, user_id) do
-    case get_user_slot_id(match_id, user_id) do
-      nil ->
-        Logger.error "Got a nil slot id when trying to remove a user from a match"
-        :ok
-
+    query = ["HGET", user_key(user_id), "slot_id"]
+    case @client |> Exredis.query(query) do
+      :undefined ->
+        # TODO: Pass in user and use username
+        Logger.error "#{Color.username(user_id)} attempted to leave match, but appears to be offline"
+      "-1" ->
+        # TODO: Pass in user and use username
+        Logger.error "#{Color.username(user_id)} attempted to leave match, but appears to not be in a match"
       slot_id ->
+        {slot_id, _} = Integer.parse(slot_id)
+
         # set slot to free
         query1 = set_slot_to_free_query(match_id, slot_id)
         # remove from set of users in the match
