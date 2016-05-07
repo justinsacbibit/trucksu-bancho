@@ -60,11 +60,19 @@ defmodule Game.TruckLord do
           nil ->
             Logger.warn "#{Color.username(user.username)} wanted to calculate PP but appears to be offline"
           _ ->
-
             file_md5 = action[:action_md5]
             mods = action[:action_mods]
             game_mode = action[:game_mode]
-            calculate_pp(user, file_md5, mods, game_mode)
+
+            case file_md5 do
+              "" ->
+                message = "PP calculation currently does not work from song select. Make sure you're playing/watching a map"
+                Logger.warn "Sending message to #{user.username}: #{message}"
+                packet = Packet.send_message(@username, message, user.username, @user_id)
+                StateServer.Client.enqueue(user.id, packet)
+              _ ->
+                calculate_pp(user, file_md5, mods, game_mode)
+            end
         end
       _ ->
         :ok
@@ -85,6 +93,31 @@ defmodule Game.TruckLord do
     {:reply, @username, state}
   end
 
+  defp mods_to_string(mods) do
+    mod_map = [
+      {"NF", 1},
+      {"EZ", 2},
+      {"HD", 8},
+      {"HR", 16},
+      {"SD", 32},
+      {"DT", 64},
+      {"RX", 128},
+      {"HT", 256},
+      {"NC", 512},
+      {"FL", 1024},
+      {"AU", 2048},
+      {"SO", 4096},
+      {"AP", 8192},
+      {"PF", 16384},
+    ]
+
+    mod_strs = for {mod_str, mod_val} <- mod_map, mods &&& mod_val > 0 do
+      mod_str
+    end
+
+    Enum.join(mod_strs, ",")
+  end
+
   defp calculate_pp(user, file_md5, mods, game_mode) do
     Logger.warn "#{Color.username(user.username)} sent pp request: file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
     trucksu_url = Application.get_env(:game, :trucksu_url)
@@ -94,7 +127,13 @@ defmodule Game.TruckLord do
         case Poison.decode body do
           {:ok, %{"pp" => pp, "osu_beatmap" => %{"version" => version, "title" => title, "difficultyrating" => stars, "creator" => creator, "artist" => artist}}} ->
 
-            message = "#{pp}pp for #{artist} - #{title} (#{creator}) [#{version}] (#{stars}*) (mods: #{mods})"
+            mod_string = mods_to_string(mods)
+            mod_string = if mod_string != "" do
+              " (mods: +#{{mod_string}})"
+            else
+              ""
+            end
+            message = "#{pp}pp for #{artist} - #{title} (#{creator}) [#{version}] (#{stars}*)#{mod_string}"
             Logger.warn "Sending message to #{user.username}: #{message}"
             packet = Packet.send_message(@username, message, user.username, @user_id)
             StateServer.Client.enqueue(user.id, packet)
