@@ -1310,9 +1310,15 @@ defmodule Game.StateServer.Client do
         {match_id, _} = Integer.parse(match_id)
         {slot_id, _} = Integer.parse(slot_id)
 
+        # TODO: Pipeline
+        in_progress = @client |> Exredis.query(["HGET", match_key(match_id), "in_progress"]) |> string_to_bool
+
         # TODO: Error checking
-        @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_ready}"])
-        send_multi_update(match_id)
+
+        if not in_progress do
+          @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_ready}"])
+          send_multi_update(match_id)
+        end
     end
   end
 
@@ -1327,8 +1333,15 @@ defmodule Game.StateServer.Client do
         {match_id, _} = Integer.parse(match_id)
         {slot_id, _} = Integer.parse(slot_id)
 
+        # TODO: Pipeline
+        in_progress = @client |> Exredis.query(["HGET", match_key(match_id), "in_progress"]) |> string_to_bool
+
         # TODO: Error checking
-        @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_not_ready}"])
+
+        if not in_progress do
+          @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_not_ready}"])
+          send_multi_update(match_id)
+        end
     end
   end
 
