@@ -1103,7 +1103,7 @@ defmodule Game.StateServer.Client do
   """
   def join_match(user, match_id, password) do
     # TODO: Leave other matches
-    # TODO: Stop spectating
+    stop_spectating(user.id, false)
 
     [match_exists, match_password] = @client |> Exredis.query_pipe([
       ["SISMEMBER", @matches_key, "#{match_id}"],
@@ -1112,8 +1112,7 @@ defmodule Game.StateServer.Client do
     case match_exists do
       "0" ->
         # does not exist
-        enqueue(user.id, Packet.match_join_fail())
-        false
+        Packet.match_join_fail()
       "1" ->
         # exists
         match_password = String.replace(match_password, " ", "_")
@@ -1156,20 +1155,18 @@ defmodule Game.StateServer.Client do
 
                   send_multi_update(match_id)
 
-                  true
+                  <<>>
                 else
                   Logger.error "#{user.username} couldn't join #{match_id}: no free slot"
-                  false
+                  Packet.match_join_fail()
                 end
               _ ->
                 Logger.error "#{user.username} couldn't join #{match_id}: already in #{current_match_id}"
-                enqueue(user.id, Packet.match_join_fail())
-                false
+                Packet.match_join_fail()
             end
           _ ->
             Logger.error "#{Color.username(user.username)} tried to join #{match_id}, but provided an incorrect password"
-            enqueue(user.id, Packet.match_join_fail())
-            false
+            Packet.match_join_fail()
         end
     end
   end
