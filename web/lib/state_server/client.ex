@@ -1176,9 +1176,8 @@ defmodule Game.StateServer.Client do
 
   def match_invite(user, invitee_id) do
 
-    match_id = @client |> Exredis.query([
-      ["HGET", user_key(user.id), "match_id"],
-    ])
+    query = ["HGET", user_key(user.id), "match_id"]
+    match_id = @client |> Exredis.query(query)
 
     case match_id do
       :undefined ->
