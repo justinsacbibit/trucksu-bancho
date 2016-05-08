@@ -5,7 +5,7 @@ defmodule Game.StateServer.Client do
   require Logger
   use Timex
   use Bitwise
-  alias Game.Packet
+  alias Game.{Packet, TruckLord}
   alias Game.Utils.Color
   alias Trucksu.{Repo, User}
 
