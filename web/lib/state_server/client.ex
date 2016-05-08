@@ -1510,7 +1510,8 @@ defmodule Game.StateServer.Client do
       ["HGET", match_slot_key(match_id, slot_id), "user_id"]
     end
 
-    for user_id <- @client |> Exredis.query_pipe(queries) do
+    for user_id <- @client |> Exredis.query_pipe(queries),
+        user_id != "-1" do
       # TODO: Pipeline
       {user_id, _} = Integer.parse(user_id)
       enqueue(user_id, Packet.match_complete())
