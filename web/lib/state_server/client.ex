@@ -1276,37 +1276,30 @@ defmodule Game.StateServer.Client do
 
         slots = @client |> Exredis.query_pipe(queries)
 
-        not_ready_players = for [_, "4", user_id] <- slots do
+        update_queries =
+        for [slot_id, status, _] <- slots,
+            {status, _} = Integer.parse(status),
+            status == @slot_status_ready or status == @slot_status_not_ready do
+          # ready players
+          {slot_id, _} = Integer.parse(slot_id)
+          [
+            "HMSET", match_slot_key(match_id, slot_id),
+            "status", "#{@slot_status_playing}",
+            "loaded", "false",
+            "skip", "false",
+            "complete", "false",
+          ]
+        end
+
+        @client |> Exredis.query_pipe(update_queries)
+
+        for [_, "32", user_id] <- @client |> Exredis.query_pipe(queries) do
           {user_id, _} = Integer.parse(user_id)
-          user_id
+          # TODO: Pipelining
+          enqueue(user_id, Packet.match_start(match_data(match_id)))
         end
 
-        case not_ready_players do
-          [] ->
-            update_queries = for [slot_id, "8", _] <- not_ready_players do
-              # ready players
-              {slot_id, _} = Integer.parse(slot_id)
-              [
-                "HMSET", match_slot_key(match_id, slot_id),
-                "status", "#{@slot_status_playing}",
-                "loaded", "false",
-                "skip", "false",
-                "complete", "false",
-              ]
-            end
-
-            @client |> Exredis.query_pipe(update_queries)
-
-            for [_, "32", user_id] <- @client |> Exredis.query_pipe(queries) do
-              {user_id, _} = Integer.parse(user_id)
-              # TODO: Pipelining
-              enqueue(user_id, Packet.match_start(match_data(match_id)))
-            end
-
-            send_multi_update(match_id)
-          _ ->
-            Logger.error "#{Color.username(user.username)} tried to start #{match_id}, but the following players are not ready: #{inspect not_ready_players}"
-        end
+        send_multi_update(match_id)
     end
 
   end
