@@ -1397,7 +1397,7 @@ defmodule Game.StateServer.Client do
   end
 
   defp all_players_completed(match_id) do
-    update_queries = [["HSET", match_key(match_id), "in_progress", "true"]]
+    update_queries = [["HSET", match_key(match_id), "in_progress", "false"]]
 
     queries = for slot_id <- generate_slot_ids() do
       ["HMGET", match_slot_key(match_id, slot_id), "slot_id", "status"]
