@@ -1077,7 +1077,7 @@ defmodule Game.StateServer.Client do
     end
   end
 
-  defp dispose_match(match_id) do
+  def dispose_match(match_id) do
     keys_to_delete = [match_key(match_id) | (for slot_id <- 0..15 do
       match_slot_key(match_id, slot_id)
     end)]
