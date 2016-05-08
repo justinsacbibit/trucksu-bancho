@@ -795,6 +795,10 @@ defmodule Game.StateServer.Client do
     match_team_type = data[:team_type]
     match_mod_mode = data[:free_mods]
 
+    # TODO: Remove overrides once implemented
+    match_team_type = @match_team_type_head_to_head
+    match_scoring_type = @match_scoring_type_score
+
     in_progress = case in_progress do
       0 ->
         "false"
