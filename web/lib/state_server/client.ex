@@ -791,8 +791,8 @@ defmodule Game.StateServer.Client do
     game_mode = data[:game_mode]
     mods = data[:mods]
     beatmap_md5 = data[:beatmap_md5]
-    match_scoring_type = data[:scoring_type]
-    match_team_type = data[:team_type]
+    #match_scoring_type = data[:scoring_type] # TODO: Uncomment
+    #match_team_type = data[:team_type]
     match_mod_mode = data[:free_mods]
 
     # TODO: Remove overrides once implemented
@@ -1116,6 +1116,8 @@ defmodule Game.StateServer.Client do
         false
       "1" ->
         # exists
+        match_password = String.replace(match_password, " ", "_")
+        password = String.replace(password, " ", "_")
 
         case match_password do
           ^password ->
@@ -1168,6 +1170,35 @@ defmodule Game.StateServer.Client do
             Logger.error "#{Color.username(user.username)} tried to join #{match_id}, but provided an incorrect password"
             enqueue(user.id, Packet.match_join_fail())
             false
+        end
+    end
+  end
+
+  def match_invite(user, invitee_id) do
+
+    match_id = @client |> Exredis.query([
+      ["HGET", user_key(user.id), "match_id"],
+    ])
+
+    case match_id do
+      :undefined ->
+        Logger.error "#{Color.username(user.username)} attempted to invite to a match, but appears to be offline"
+      "-1" ->
+        Logger.error "#{Color.username(user.username)} attempted to invite to a match, but appears to not be in a match"
+      _ ->
+        {match_id, _} = Integer.parse(match_id)
+
+        query = ["HMGET", match_key(match_id), "match_password", "match_name"]
+        [match_password, match_name] = @client |> Exredis.query(query)
+
+        case Repo.get User, invitee_id do
+          nil ->
+            Logger.error "#{Color.username(user.username)} attempted to invite #{invitee_id}, but no user with that id exists"
+          invitee ->
+            match_password = String.replace(match_password, " ", "_")
+            message = "Come join my multiplayer match: \"[osump://#{match_id}/#{match_password} #{match_name}]\""
+            Logger.warn "Sending message \"#{message}\" to #{Color.username(user.username)}"
+            enqueue(invitee_id, Packet.send_message(user.username, message, invitee.username, user.id))
         end
     end
   end

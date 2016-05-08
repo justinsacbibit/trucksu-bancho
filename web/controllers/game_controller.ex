@@ -305,7 +305,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(31, data, user) do
-    Logger.warn "#{Color.username(user.username)}!createMatch: #{inspect(data, limit: :infinity)}"
+    Logger.warn "#{Color.username(user.username)}!createMatch: \"#{data[:match_name]}\""
 
     cond do
       user.id == 3 or user.id == 5 ->
@@ -362,8 +362,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(41, data, user) do
-    # client_matchChangeSettings
-    Logger.warn "#{Color.username(user.username)}!matchChangeSettings: #{inspect(data, limit: :infinity)}"
+    Logger.warn "#{Color.username(user.username)}!matchChangeSettings: #{data[:match_id]}"
 
     StateServer.Client.change_match_settings(user, data)
 
@@ -540,6 +539,14 @@ defmodule Game.GameController do
     else
       <<>>
     end
+  end
+
+  defp handle_packet(87, data, user) do
+    Logger.warn "#{Color.username(user.username)}!invite - #{inspect data}"
+
+    StateServer.Client.match_invite(user, data[:user_id])
+
+    <<>>
   end
 
   defp handle_packet(97, data, user) do

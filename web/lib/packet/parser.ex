@@ -176,10 +176,16 @@ defmodule Game.Packet.Decoder do
     ])
   end
 
-  def join_match(data) do
+  defp join_match(data) do
     decode_with_format(data, [
       match_id: :uint32,
       password: :string,
+    ])
+  end
+
+  defp match_invite(data) do
+    decode_with_format(data, [
+      user_id: :int32,
     ])
   end
 
@@ -207,6 +213,7 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(78, data), do: channel_part(data)
   defp decode_packet(79, _), do: [] # receiveUpdates
   defp decode_packet(85, data), do: user_stats_request(data)
+  defp decode_packet(87, data), do: match_invite(data)
   defp decode_packet(97, _), do: [] # userPresenceRequest
   defp decode_packet(_, data), do: decode_with_format(data, [])
 
