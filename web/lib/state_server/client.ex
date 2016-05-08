@@ -4,8 +4,8 @@ defmodule Game.StateServer.Client do
   """
   require Logger
   use Timex
-  alias Game.{Packet, TruckLord}
   use Bitwise
+  alias Game.Packet
   alias Game.Utils.Color
   alias Trucksu.{Repo, User}
 
@@ -13,6 +13,7 @@ defmodule Game.StateServer.Client do
   @default_channels ["#osu", "#announce"]
   @other_channels ["#lobby"] # this does nothing right now
   @lobby_key "mp_lobby"
+  @matches_key "matches"
 
   # Determines the amount of time to ignore logout requests after logging in.
   @recently_logged_in_threshold 10 # seconds
@@ -45,9 +46,6 @@ defmodule Game.StateServer.Client do
   def match_mod_mode_free_mod(), do: @match_mod_mode_free_mod
   def slot_status_free(), do: @slot_status_free
   def slot_status_locked(), do: @slot_status_locked
-
-  # Determines the amount of time to ignore logout requests after logging in.
-  @recently_logged_in_threshold 10 # seconds
 
   @doc """
   Initializes Redis state if necessary. This should be called within the
@@ -172,7 +170,7 @@ defmodule Game.StateServer.Client do
       part_lobby_query(user_id),
     ])
 
-    part_match(user_id)
+    part_match(user_id, false)
     remove_spectators(user_id)
     stop_spectating(user_id, false)
 
@@ -576,11 +574,15 @@ defmodule Game.StateServer.Client do
 
     # TODO: Pipelining
 
+    # Add the user into the lobby
     @client |> Exredis.query(["SADD", @lobby_key, user_id])
 
-    # TODO: Send a createMatch packet for each match in the lobby
+    # Enqueue all matches to the user who just joined the lobby
+    match_ids = @client |> Exredis.query(["SMEMBERS", @matches_key])
+    packets = for match_id <- match_ids, {match_id, _} = Integer.parse(match_id) do
+      Packet.create_match(match_data(match_id))
+    end
 
-    packets = [<<>>]
     packet = Enum.reduce(packets, <<>>, &<>/2)
     enqueue(user_id, packet)
   end
@@ -620,6 +622,10 @@ defmodule Game.StateServer.Client do
       "seed", "0",
     ]
 
+    query2 = [
+      "SADD", @matches_key, "#{match_id}",
+    ]
+
     slot_queries = for slot_id <- 0..15, do: [
       "HMSET",
       match_slot_key(match_id, slot_id),
@@ -633,7 +639,7 @@ defmodule Game.StateServer.Client do
       "complete", "false",
     ]
 
-    @client |> Exredis.query_pipe([query1 | slot_queries])
+    @client |> Exredis.query_pipe([query1, query2] ++ slot_queries)
 
     # TODO: Clear spectators
 
@@ -987,12 +993,16 @@ defmodule Game.StateServer.Client do
   @doc """
   Removes a user from a multiplayer match.
   """
-  def part_match(user_id) do
+  def part_match(user_id, force \\ true) do
     case @client |> Exredis.query(["HGET", user_key(user_id), "match_id"]) do
       :undefined ->
-        Logger.error "#{user_id} tried to part a match, but appears to be offline"
+        if force do
+          Logger.error "#{user_id} tried to part a match, but appears to be offline"
+        end
       "-1" ->
-        Logger.error "#{user_id} tried to part a match, but appears to not be in a match"
+        if force do
+          Logger.error "#{user_id} tried to part a match, but appears to not be in a match"
+        end
       match_id ->
         {match_id, _} = Integer.parse(match_id)
         match_user_left(match_id, user_id)
@@ -1064,35 +1074,14 @@ defmodule Game.StateServer.Client do
 
   defp dispose_match(match_id) do
     keys_to_delete = [match_key(match_id) | (for slot_id <- 0..15 do
-        match_slot_key(match_id, slot_id)
+      match_slot_key(match_id, slot_id)
     end)]
 
-    @client |> Exredis.query(["DEL" | keys_to_delete])
-  end
+    query1 = ["DEL" | keys_to_delete]
 
-  defp get_user_slot_id(match_id, user_id) do
-    queries = for slot_id <- 0..15 do
-      ["HMGET", match_slot_key(match_id, slot_id ), "slot_id", "user_id"]
-    end
-    ret = @client |> Exredis.query_pipe(queries)
+    query2 = ["SREM", @matches_key, "#{match_id}"]
 
-    found = for [slot_id, slot_user_id] <- ret, slot_user_id != :undefined and elem(Integer.parse(slot_user_id), 0) == user_id do
-      slot_id
-    end
-
-    case found do
-      [slot_id] ->
-        {slot_id, _} = Integer.parse(slot_id)
-        slot_id
-      [] ->
-        Logger.error "Couldn't find #{user_id} in #{match_id} slots: #{inspect ret}"
-        nil
-      [slot_id | _] ->
-        Logger.error "Found multiple instances of the same user id in match slots"
-        # TODO: Correct the state
-        {slot_id, _} = Integer.parse(slot_id)
-        slot_id
-    end
+    @client |> Exredis.query_pipe([query1, query2])
   end
 
   @doc """

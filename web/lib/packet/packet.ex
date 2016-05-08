@@ -148,7 +148,7 @@ defmodule Game.Packet do
   def user_panel(user, action) do
     trucklord_user_id = TruckLord.user_id
     case user.id do
-      trucklord_user_id ->
+      ^trucklord_user_id ->
         new(Ids.server_userPanel, [
           {user.id, :uint32},
           {user.username, :string},
@@ -177,19 +177,19 @@ defmodule Game.Packet do
         end
 
         case stats_and_rank(user_id, game_mode) do
-            nil ->
-              <<>>
-            {_stats, game_rank} ->
-              new(Ids.server_userPanel, [
-                {user.id, :uint32},
-                {user.username, :string},
-                {timezone, :uint8},
-                {country_id, :uint8},
-                {user_rank, :uint8},
-                {longitude, :float},
-                {latitude, :float},
-                {game_rank, :uint32},
-              ])
+          nil ->
+            <<>>
+          {_stats, game_rank} ->
+            new(Ids.server_userPanel, [
+              {user.id, :uint32},
+              {user.username, :string},
+              {timezone, :uint8},
+              {country_id, :uint8},
+              {user_rank, :uint8},
+              {longitude, :float},
+              {latitude, :float},
+              {game_rank, :uint32},
+            ])
         end
     end
   end
