@@ -321,7 +321,7 @@ defmodule Game.GameController do
     Logger.warn "#{Color.username(user.username)}!joinMatch: match_id=#{data[:match_id]} password=#{data[:password]}"
 
     cond do
-      user.id == 3 or user.id == 5 ->
+      user.id == 3 or user.id == 5 or user.id == 9 ->
         StateServer.Client.join_match(user, data[:match_id], data[:password])
         <<>>
       true ->
