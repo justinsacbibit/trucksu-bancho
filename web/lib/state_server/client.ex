@@ -1101,6 +1101,7 @@ defmodule Game.StateServer.Client do
     case match_exists do
       "0" ->
         # does not exist
+        enqueue(user.id, Packet.match_join_fail())
         false
       "1" ->
         # exists
