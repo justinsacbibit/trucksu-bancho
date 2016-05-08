@@ -365,7 +365,7 @@ defmodule Game.Packet do
   end
 
   def dispose_match(match_id) do
-    new(Ids.server_disposeMatch, [{match_id, :uint16}])
+    new(Ids.server_disposeMatch, [{match_id, :uint32}])
   end
 
   def match_join_success(data) do
