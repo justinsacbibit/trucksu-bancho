@@ -1154,6 +1154,7 @@ defmodule Game.StateServer.Client do
             end
           _ ->
             Logger.error "#{user.username} couldn't join #{match_id}: already in #{current_match_id}"
+            enqueue(user.id, Packet.match_join_fail())
             false
         end
     end
