@@ -980,11 +980,15 @@ defmodule Game.StateServer.Client do
             @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_free}"])
             send_multi_update(match_id)
           _ ->
-            Logger.error "#{Color.username(user.username)} kicked user with id #{kickee_id} from match_id=#{match_id}"
-            {kickee_id, _} = Integer.parse(kickee_id)
-            part_match(kickee_id)
-            @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_locked}"])
-            send_multi_update(match_id)
+            host_id = user.id
+            case kickee_id do
+              ^host_id ->
+                :ok
+              _ ->
+                Logger.error "#{Color.username(user.username)} kicked user with id #{kickee_id} from match_id=#{match_id}"
+                {kickee_id, _} = Integer.parse(kickee_id)
+                part_match(kickee_id, true, true)
+            end
         end
     end
   end
@@ -1006,7 +1010,7 @@ defmodule Game.StateServer.Client do
   @doc """
   Removes a user from a multiplayer match.
   """
-  def part_match(user_id, force \\ true) do
+  def part_match(user_id, force \\ true, kicked \\ false) do
     case @client |> Exredis.query(["HGET", user_key(user_id), "match_id"]) do
       :undefined ->
         if force do
@@ -1018,14 +1022,22 @@ defmodule Game.StateServer.Client do
         end
       match_id ->
         {match_id, _} = Integer.parse(match_id)
-        match_user_left(match_id, user_id)
+        match_user_left(match_id, user_id, kicked)
     end
   end
 
   defp set_slot_to_free_query(match_id, slot_id) do
+    set_slot_query(match_id, slot_id, @slot_status_free)
+  end
+
+  defp set_slot_to_locked_query(match_id, slot_id) do
+    set_slot_query(match_id, slot_id, @slot_status_locked)
+  end
+
+  defp set_slot_query(match_id, slot_id, status) do
     [
       "HMSET", match_slot_key(match_id, slot_id),
-      "status", "#{@slot_status_free}",
+      "status", "#{status}",
       "team", "0",
       "user_id", "-1",
       "mods", "0",
@@ -1035,7 +1047,7 @@ defmodule Game.StateServer.Client do
     ]
   end
 
-  defp match_user_left(match_id, user_id) do
+  defp match_user_left(match_id, user_id, kicked) do
     query = ["HGET", user_key(user_id), "slot_id"]
     case @client |> Exredis.query(query) do
       :undefined ->
@@ -1048,7 +1060,11 @@ defmodule Game.StateServer.Client do
         {slot_id, _} = Integer.parse(slot_id)
 
         # set slot to free
-        query1 = set_slot_to_free_query(match_id, slot_id)
+        query1 = if kicked do
+          set_slot_to_locked_query(match_id, slot_id)
+        else
+          set_slot_to_free_query(match_id, slot_id)
+        end
         # remove from set of users in the match
         query2 = [
           "SREM", match_users_key(match_id),
@@ -1070,18 +1086,20 @@ defmodule Game.StateServer.Client do
           {slot_user_id, _} = Integer.parse(slot_user_id)
           slot_user_id
         end
-        case players do
-          [] ->
-            dispose_match(match_id)
-          [first_player_id | _] ->
-            host_user_id = @client |> Exredis.query(["HGET", match_key(match_id), "host_user_id"])
-            {host_user_id, _} = Integer.parse(host_user_id)
-            if user_id == host_user_id do
-              set_match_host(match_id, first_player_id)
-            end
-            send_multi_update(match_id)
+        if not kicked do
+          case players do
+            [] ->
+              dispose_match(match_id)
+            [first_player_id | _] ->
+              host_user_id = @client |> Exredis.query(["HGET", match_key(match_id), "host_user_id"])
+              {host_user_id, _} = Integer.parse(host_user_id)
+              if user_id == host_user_id do
+                set_match_host(match_id, first_player_id)
+              end
+          end
         end
         enqueue(user_id, Packet.channel_kicked("#multiplayer"))
+        send_multi_update(match_id)
     end
   end
 
