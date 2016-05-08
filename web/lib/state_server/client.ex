@@ -1050,10 +1050,10 @@ defmodule Game.StateServer.Client do
         @client |> Exredis.query_pipe([query1, query2, query3])
 
         queries = for slot_id <- 0..15 do
-          ["HMGET", match_slot_key(match_id, slot_id), "slot_id", "user_id"]
+          ["HGET", match_slot_key(match_id, slot_id), "user_id"]
         end
         ret = @client |> Exredis.query_pipe(queries)
-        players = for [slot_id, slot_user_id] <- ret, slot_user_id != "-1" do
+        players = for slot_user_id <- ret, slot_user_id != "-1" do
           {slot_user_id, _} = Integer.parse(slot_user_id)
           slot_user_id
         end
@@ -1082,6 +1082,11 @@ defmodule Game.StateServer.Client do
     query2 = ["SREM", @matches_key, "#{match_id}"]
 
     @client |> Exredis.query_pipe([query1, query2])
+
+    lobby_user_ids = @client |> Exredis.query(["SMEMBERS", @lobby_key])
+    for lobby_user_id <- lobby_user_ids, {lobby_user_id, _} = Integer.parse(lobby_user_id) do
+      enqueue(lobby_user_id, Packet.dispose_match(match_id))
+    end
   end
 
   @doc """
