@@ -1099,6 +1099,7 @@ defmodule Game.StateServer.Client do
               send_multi_update(match_id)
           end
         else
+          send_multi_update(match_id)
           enqueue(user_id, Packet.update_match(match_data(match_id)))
         end
         enqueue(user_id, Packet.channel_kicked("#multiplayer"))
