@@ -549,6 +549,14 @@ defmodule Game.GameController do
     <<>>
   end
 
+  defp handle_packet(90, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchChangePassword - match_id=#{data[:match_id]} match_password=\"#{data[:match_password]}\""
+
+    StateServer.Client.match_change_password(user, data)
+
+    <<>>
+  end
+
   defp handle_packet(97, data, user) do
     Logger.warn "#{Color.username(user.username)}!userPresenceRequest - #{inspect data}"
 

@@ -154,6 +154,10 @@ defmodule Game.Packet.Decoder do
     match_settings(data)
   end
 
+  defp match_change_password(data) do
+    match_settings(data)
+  end
+
   defp match_lock(data) do
     decode_with_format(data, [
       slot_id: :int32,
@@ -214,6 +218,7 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(79, _), do: [] # receiveUpdates
   defp decode_packet(85, data), do: user_stats_request(data)
   defp decode_packet(87, data), do: match_invite(data)
+  defp decode_packet(90, data), do: match_change_password(data)
   defp decode_packet(97, _), do: [] # userPresenceRequest
   defp decode_packet(_, data), do: decode_with_format(data, [])
 

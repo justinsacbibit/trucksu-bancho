@@ -1174,6 +1174,28 @@ defmodule Game.StateServer.Client do
     end
   end
 
+  def match_change_password(user, data) do
+    # TODO: Verify host
+
+    match_id = data[:match_id]
+    match_password = data[:match_password]
+
+    query = ["HSET", match_key(match_id), "match_password", match_password]
+    @client |> Exredis.query(query)
+
+    queries = for slot_id <- generate_slot_ids() do
+      ["HGET", match_slot_key(match_id, slot_id), "user_id"]
+    end
+
+    for user_id <- @client |> Exredis.query_pipe(queries),
+        user_id != :undefined and user_id != "-1",
+        {user_id, _} = Integer.parse(user_id) do
+      enqueue(user_id, Packet.change_match_password(match_password))
+    end
+
+    send_multi_update(match_id)
+  end
+
   def match_invite(user, invitee_id) do
 
     query = ["HGET", user_key(user.id), "match_id"]
