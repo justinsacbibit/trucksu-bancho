@@ -988,6 +988,11 @@ defmodule Game.StateServer.Client do
     for match_user_id <- match_user_ids do
       enqueue(match_user_id, Packet.update_match(match))
     end
+
+    lobby_user_ids = @client |> Exredis.query(["SMEMBERS", @lobby_key])
+    for lobby_user_id <- lobby_user_ids, {lobby_user_id, _} = Integer.parse(lobby_user_id) do
+      enqueue(lobby_user_id, Packet.update_match(match))
+    end
   end
 
   @doc """

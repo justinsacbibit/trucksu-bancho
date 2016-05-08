@@ -379,7 +379,7 @@ defmodule Game.GameController do
   end
 
   defp handle_packet(47, data, user) do
-    Logger.warn "#{Color.username(user.username)}!matchScoreUpdate"
+    Logger.debug "#{Color.username(user.username)}!matchScoreUpdate: #{inspect data}"
 
     StateServer.Client.match_frames(user, data[:data])
 
