@@ -345,7 +345,7 @@ defmodule Game.GameController do
     <<>>
   end
 
-  defp handle_packet(39, data, user) do
+  defp handle_packet(39, _data, user) do
     Logger.warn "#{Color.username(user.username)}!matchReady"
 
     StateServer.Client.match_ready(user)
@@ -410,7 +410,7 @@ defmodule Game.GameController do
     <<>>
   end
 
-  defp handle_packet(54, data, user) do
+  defp handle_packet(54, _data, user) do
     Logger.warn "#{Color.username(user.username)}!matchNoBeatmap"
 
     StateServer.Client.match_has_beatmap(user, false)
@@ -418,7 +418,7 @@ defmodule Game.GameController do
     <<>>
   end
 
-  defp handle_packet(55, data, user) do
+  defp handle_packet(55, _data, user) do
     Logger.warn "#{Color.username(user.username)}!matchNotReady"
 
     StateServer.Client.match_not_ready(user)
@@ -426,7 +426,7 @@ defmodule Game.GameController do
     <<>>
   end
 
-  defp handle_packet(59, data, user) do
+  defp handle_packet(59, _data, user) do
     Logger.warn "#{Color.username(user.username)}!matchHasBeatmap"
 
     StateServer.Client.match_has_beatmap(user, true)
@@ -434,7 +434,7 @@ defmodule Game.GameController do
     <<>>
   end
 
-  defp handle_packet(60, data, user) do
+  defp handle_packet(60, _data, user) do
     Logger.warn "#{Color.username(user.username)}!matchSkipRequest"
 
     StateServer.Client.match_skip_request(user)
