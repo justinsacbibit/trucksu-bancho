@@ -967,7 +967,7 @@ defmodule Game.StateServer.Client do
       match_id ->
         {match_id, _} = Integer.parse(match_id)
 
-        slot_status = @client |> Exredis.query(["HGET", match_slot_key(match_id, slot_id), "status"])
+        [slot_status, kickee_id] = @client |> Exredis.query(["HMGET", match_slot_key(match_id, slot_id), "status", "user_id"])
         case slot_status do
           :undefined ->
             Logger.error "#{Color.username(user.username)} tried to lock slot #{slot_id}, but the match appears to not exist"
@@ -980,7 +980,11 @@ defmodule Game.StateServer.Client do
             @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_free}"])
             send_multi_update(match_id)
           _ ->
-            Logger.error "#{Color.username(user.username)} tried to lock slot #{slot_id}, but the slot appears to be taken"
+            Logger.error "#{Color.username(user.username)} kicked user with id #{kickee_id} from match_id=#{match_id}"
+            {kickee_id, _} = Integer.parse(kickee_id)
+            part_match(kickee_id)
+            @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_locked}"])
+            send_multi_update(match_id)
         end
     end
   end
