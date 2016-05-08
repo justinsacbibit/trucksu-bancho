@@ -980,13 +980,13 @@ defmodule Game.StateServer.Client do
             @client |> Exredis.query(["HSET", match_slot_key(match_id, slot_id), "status", "#{@slot_status_free}"])
             send_multi_update(match_id)
           _ ->
+            {kickee_id, _} = Integer.parse(kickee_id)
             host_id = user.id
             case kickee_id do
               ^host_id ->
                 :ok
               _ ->
                 Logger.error "#{Color.username(user.username)} kicked user with id #{kickee_id} from match_id=#{match_id}"
-                {kickee_id, _} = Integer.parse(kickee_id)
                 part_match(kickee_id, true, true)
             end
         end
