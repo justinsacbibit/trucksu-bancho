@@ -1112,40 +1112,49 @@ defmodule Game.StateServer.Client do
         # exists
         # TODO: Check password
 
-        match = match_data(match_id)
-        free_slot = Enum.find(match[:slots], fn(slot) -> slot[:status] == @slot_status_free end)
-        if not is_nil(free_slot) do
-          query1 = [
-            "HMSET",
-            match_slot_key(match_id, "#{free_slot[:slot_id]}"),
-            "status", "#{@slot_status_not_ready}",
-            "team", "0",
-            "user_id", "#{user.id}",
-            "mods", "0",
-          ]
-          query2 = [
-            "HMSET",
-            user_key(user.id),
-            "match_id", "#{match_id}",
-            "slot_id", "#{free_slot[:slot_id]}",
-          ]
-          query3 = [
-            "SADD", match_users_key(match_id),
-            "#{user.id}",
-          ]
-          @client |> Exredis.query_pipe([query1, query2, query3])
+        current_match_id = @client |> Exredis.query(["HGET", user_key(user.id), "match_id"])
 
-          # TODO: Send update to users
+        case current_match_id do
+          "-1" ->
+            # Make sure user is not already in a match
+            match = match_data(match_id)
+            free_slot = Enum.find(match[:slots], fn(slot) -> slot[:status] == @slot_status_free end)
+            if not is_nil(free_slot) do
+              query1 = [
+                "HMSET",
+                match_slot_key(match_id, "#{free_slot[:slot_id]}"),
+                "status", "#{@slot_status_not_ready}",
+                "team", "0",
+                "user_id", "#{user.id}",
+                "mods", "0",
+              ]
+              query2 = [
+                "HMSET",
+                user_key(user.id),
+                "match_id", "#{match_id}",
+                "slot_id", "#{free_slot[:slot_id]}",
+              ]
+              query3 = [
+                "SADD", match_users_key(match_id),
+                "#{user.id}",
+              ]
+              @client |> Exredis.query_pipe([query1, query2, query3])
 
-          enqueue(user.id, Packet.match_join_success(match_data(match_id)))
-          enqueue(user.id, Packet.channel_join_success("#multiplayer"))
+              # TODO: Send update to users
 
-          send_multi_update(match_id)
+              enqueue(user.id, Packet.match_join_success(match_data(match_id)))
+              enqueue(user.id, Packet.channel_join_success("#multiplayer"))
 
-          true
-        else
-          Logger.error "#{user.username} couldn't join #{match_id}: no free slot"
-          false
+              send_multi_update(match_id)
+
+              true
+            else
+              Logger.error "#{user.username} couldn't join #{match_id}: no free slot"
+              false
+            end
+          _ ->
+            Logger.error "#{user.username} couldn't join #{match_id}: already in #{current_match_id}"
+            false
         end
     end
   end
