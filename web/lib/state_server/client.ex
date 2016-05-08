@@ -1096,10 +1096,12 @@ defmodule Game.StateServer.Client do
               if user_id == host_user_id do
                 set_match_host(match_id, first_player_id)
               end
+              send_multi_update(match_id)
           end
+        else
+          enqueue(user_id, Packet.update_match(match_data(match_id)))
         end
         enqueue(user_id, Packet.channel_kicked("#multiplayer"))
-        send_multi_update(match_id)
     end
   end
 
