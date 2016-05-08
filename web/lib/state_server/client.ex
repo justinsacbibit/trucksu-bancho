@@ -1428,7 +1428,8 @@ defmodule Game.StateServer.Client do
         end
         # Enqueue frames to whoever is playing
         packet = Packet.match_frames(slot_id, data)
-        for ["32", user_id] <- @client |> Exredis.query_pipe(queries) do
+        for ["32", user_id] <- @client |> Exredis.query_pipe(queries),
+            user_id != "-1" do
           {user_id, _} = Integer.parse(user_id)
           # TODO: Pipeline
           enqueue(user_id, packet)
