@@ -159,6 +159,11 @@ defmodule Game.StateServer.Client do
   Enqueues a logout packet to all other users, and removes the user from all channels.
   """
   def remove_user(user_id) do
+
+    part_match(user_id, false)
+    remove_spectators(user_id)
+    stop_spectating(user_id, false)
+
     logout_packet = Packet.logout(user_id)
 
     username = @client |> Exredis.query(["HGET", user_key(user_id), "username"])
@@ -169,10 +174,6 @@ defmodule Game.StateServer.Client do
       ["DEL", user_queue_key(user_id)],
       part_lobby_query(user_id),
     ])
-
-    part_match(user_id, false)
-    remove_spectators(user_id)
-    stop_spectating(user_id, false)
 
     enqueue_all(logout_packet)
 

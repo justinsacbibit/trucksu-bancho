@@ -14,6 +14,7 @@ defmodule Game.GameController do
     Repo,
     Beatmap,
     Friendship,
+    KnownIp,
     User,
   }
   alias Game.Utils.Color
@@ -34,18 +35,12 @@ defmodule Game.GameController do
   end
 
   defp get_request_ip(conn, _) do
-    osu_token = conn.assigns[:osu_token]
-    case osu_token do
-      [] ->
-        request_ip = case Plug.Conn.get_req_header(conn, "x-forwarded-for") do
-          [request_ip] -> request_ip
-          _ -> "0.0.0.0"
-        end
-
-        assign(conn, :request_ip, request_ip)
-      _ ->
-        conn
+    request_ip = case Plug.Conn.get_req_header(conn, "x-forwarded-for") do
+      [request_ip] -> request_ip
+      _ -> "0.0.0.0"
     end
+
+    assign(conn, :request_ip, request_ip)
   end
 
   defp get_request_location(conn, _) do
@@ -98,6 +93,21 @@ defmodule Game.GameController do
     case Session.authenticate(username, hashed_password, true) do
       {:ok, user} ->
         {:ok, jwt, _full_claims} = user |> Guardian.encode_and_sign(:token)
+
+        request_ip = conn.assigns[:request_ip]
+        case Repo.get_by KnownIp, ip_address: request_ip, user_id: user.id do
+          nil ->
+            changeset = KnownIp.changeset(%KnownIp{}, %{ip_address: request_ip, user_id: user.id})
+            case Repo.insert changeset do
+              {:ok, _} ->
+                Logger.warn "Saved new IP address #{request_ip} for #{Color.username(user.username)}"
+              {:error, error} ->
+                Logger.error "Unable to save new IP address #{request_ip} for #{Color.username(user.username)}"
+                Logger.error inspect error
+            end
+          _ ->
+            :ok
+        end
 
         location = conn.assigns[:location]
         country_code = conn.assigns[:country_code]

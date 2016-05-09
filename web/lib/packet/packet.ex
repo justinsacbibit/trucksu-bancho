@@ -206,10 +206,14 @@ defmodule Game.Packet do
              OVER (
                ORDER BY pp DESC) game_rank,
              user_id, id
-           FROM
-             (SELECT * FROM user_stats us
-               WHERE us.game_mode = (?)
-             ) sc) sc
+           FROM (
+             SELECT us.*
+             FROM user_stats us
+             JOIN users u
+               ON u.id = us.user_id
+             WHERE u.banned = FALSE
+              AND us.game_mode = (?)
+           ) sc) sc
         WHERE user_id = (?)
       ", ^game_mode, ^user_id),
         on: s.id == s_.id,
