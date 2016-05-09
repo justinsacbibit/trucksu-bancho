@@ -91,7 +91,7 @@ defmodule Game.GameController do
     Logger.warn "Received login request for #{username}"
 
     case Session.authenticate(username, hashed_password, true) do
-      {:ok, user} ->
+      {:ok, %User{banned: false} = user} ->
         {:ok, jwt, _full_claims} = user |> Guardian.encode_and_sign(:token)
 
         request_ip = conn.assigns[:request_ip]
@@ -117,6 +117,9 @@ defmodule Game.GameController do
         Repo.update! changeset
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
+      {:ok, user} ->
+        Logger.warn "Login failed for banned user #{Color.username(username)}"
+        render prepare_conn(conn), "response.raw", data: Packet.login_failed
       {:error, reason} ->
         Logger.warn "Login failed for #{Color.username(username)}. Reason: #{reason}"
         render prepare_conn(conn), "response.raw", data: Packet.login_failed
