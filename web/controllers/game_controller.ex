@@ -613,5 +613,6 @@ defmodule Game.GameController do
     <> Enum.reduce(online_users, <<>>, &(&2 <> Packet.user_panel(&1)))
     <> Enum.reduce(online_users, <<>>, &(&2 <> Packet.user_stats(&1)))
     <> Packet.online_users
+    <> Packet.notification("Server IP will be changing soon! You can find the new one in the Discord, in the #general topic, or in #changelog.")
   end
 end
