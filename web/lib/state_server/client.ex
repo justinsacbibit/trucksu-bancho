@@ -1590,6 +1590,34 @@ defmodule Game.StateServer.Client do
     end
   end
 
+  def match_transfer_host(user, slot_id) do
+    query = ["HGET", user_key(user.id), "match_id"]
+    case @client |> Exredis.query(query) do
+      :undefined ->
+        Logger.error "#{Color.username(user.username)} attempted to transfer host, but appears to be offline"
+      "-1" ->
+        Logger.error "#{Color.username(user.username)} attempted to transfer host, but appears to not be in a match"
+      match_id ->
+        {match_id, _} = Integer.parse(match_id)
+
+        # TODO: Verify that user is the host
+
+        [slot_status, new_host_id] = @client |> Exredis.query(["HMGET", match_slot_key(match_id, slot_id), "status", "user_id"])
+        case slot_status do
+          :undefined ->
+            Logger.error "#{Color.username(user.username)} tried to transfer host, but the match appears to not exist"
+          "1" ->
+            Logger.warn "#{Color.username(user.username)} tried to transfer host, but no one is in that slot"
+          "2" ->
+            Logger.warn "#{Color.username(user.username)} tried to transfer host, but the slot is locked"
+          _ ->
+            {new_host_id, _} = Integer.parse(new_host_id)
+            set_match_host(match_id, new_host_id)
+            send_multi_update(match_id)
+        end
+    end
+  end
+
   @doc """
   Sets a user as the host of a multiplayer match.
   """

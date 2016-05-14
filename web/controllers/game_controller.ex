@@ -457,6 +457,14 @@ defmodule Game.GameController do
     <<>>
   end
 
+  defp handle_packet(70, data, user) do
+    Logger.warn "#{Color.username(user.username)}!matchTransferHost: #{inspect data}"
+
+    StateServer.Client.match_transfer_host(user, data[:slot_id])
+
+    <<>>
+  end
+
   defp handle_packet(73, data, user) do
     friend_id = data[:friend_id]
     Logger.warn "#{Color.username(user.username)}!friendAdd: #{friend_id}"

@@ -193,6 +193,12 @@ defmodule Game.Packet.Decoder do
     ])
   end
 
+  defp match_transfer_host(data) do
+    decode_with_format(data, [
+      slot_id: :int32,
+    ])
+  end
+
   defp decode_packet(0, data), do: change_action(data)
   defp decode_packet(1, data), do: send_public_message(data)
   defp decode_packet(2, _), do: [] # logout
@@ -212,6 +218,7 @@ defmodule Game.Packet.Decoder do
   defp decode_packet(51, data), do: match_change_mods(data)
   defp decode_packet(63, data), do: channel_join(data)
   defp decode_packet(68, _), do: [] # beatmapInfoRequest
+  defp decode_packet(70, data), do: match_transfer_host(data)
   defp decode_packet(73, data), do: add_remove_friend(data)
   defp decode_packet(74, data), do: add_remove_friend(data)
   defp decode_packet(78, data), do: channel_part(data)
