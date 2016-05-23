@@ -12,7 +12,6 @@ defmodule Game.GameController do
     Session,
 
     Repo,
-    Beatmap,
     Friendship,
     KnownIp,
     User,
@@ -173,25 +172,6 @@ defmodule Game.GameController do
       0 -> :ok
       _ ->
         Logger.warn "changeAction for #{Color.username(user.username)}: #{inspect Enum.map(data, &(elem(&1, 1)))}"
-    end
-
-    if data[:action_id] == 2 do
-      # The user has started to play a song
-
-      # Example data
-      # [action_id: 2, action_text: "Kuba Oms - My Love [Insane]", action_md5: "e9d69824c6d6d584bd055b690f71deaf", action_mods: 65, game_mode: 0]
-
-      beatmap_md5 = data[:action_md5]
-      case Repo.get_by(Beatmap, file_md5: beatmap_md5) do
-        nil ->
-          params = %{
-            file_md5: beatmap_md5,
-          }
-          Repo.insert Beatmap.changeset(%Beatmap{}, params)
-
-        _beatmap ->
-          :ok
-      end
     end
 
     StateServer.Client.change_action(user, data)
