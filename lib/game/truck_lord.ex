@@ -139,21 +139,26 @@ defmodule Game.TruckLord do
             StateServer.Client.enqueue(user.id, packet)
 
           {:error, error} ->
-            Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
-            Logger.error inspect error
+            Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}: #{inspect error}"
+            message = "Sorry, an error occurred. Please let a developer know."
+            send_error_message(user, message)
 
           _ ->
-            Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
-            Logger.error inspect body
+            Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}: #{inspect body}"
+            message = "Sorry, an error occurred. Please let a developer know."
+            send_error_message(user, message)
         end
       {:error, error} ->
-        Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
-        Logger.error inspect error
+        Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}: #{inspect error}"
 
         message = "I wasn't able to calculate the pp for that map - you might have an outdated version"
-        Logger.warn "Sending message to #{user.username}: #{message}"
-        packet = Packet.send_message(@username, message, user.username, @user_id)
-        StateServer.Client.enqueue(user.id, packet)
+        send_error_message(user, message)
     end
+  end
+
+  defp send_error_message(user, message) do
+    Logger.warn "Sending message to #{user.username}: #{message}"
+    packet = Packet.send_message(@username, message, user.username, @user_id)
+    StateServer.Client.enqueue(user.id, packet)
   end
 end
