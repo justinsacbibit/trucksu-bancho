@@ -120,9 +120,9 @@ defmodule Game.TruckLord do
 
   defp calculate_pp(user, file_md5, mods, game_mode) do
     Logger.warn "#{Color.username(user.username)} sent pp request: file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
-    trucksu_url = Application.get_env(:game, :trucksu_url)
+    trucksu_api_url = Application.get_env(:game, :trucksu_api_url)
     server_cookie = Application.get_env(:game, :server_cookie)
-    case HTTPoison.get(trucksu_url <> "/api/v1/pp-calc", [], params: [{"file_md5", file_md5}, {"mods", "#{mods}"}, {"m", "#{game_mode}"}, {"c", server_cookie}]) do
+    case HTTPoison.get(trucksu_api_url <> "/v1/pp-calc", [], params: [{"file_md5", file_md5}, {"mods", "#{mods}"}, {"m", "#{game_mode}"}, {"c", server_cookie}]) do
       {:ok, %HTTPoison.Response{body: body}} ->
         case Poison.decode body do
           {:ok, %{"pp" => pp, "osu_beatmap" => %{"version" => version, "title" => title, "difficultyrating" => stars, "creator" => creator, "artist" => artist}}} ->

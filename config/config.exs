@@ -30,7 +30,7 @@ config :guardian, Guardian,
 
 config :game,
   server_cookie: System.get_env("SERVER_COOKIE"),
-  trucksu_url: System.get_env("TRUCKSU_URL"),
+  trucksu_api_url: System.get_env("TRUCKSU_API_URL"),
   get_request_location: System.get_env("GET_REQUEST_LOCATION") || false
 
 # Import environment specific config. This must remain at the bottom
