@@ -125,7 +125,7 @@ defmodule Game.TruckLord do
     case HTTPoison.get(trucksu_api_url <> "/v1/pp-calc", [], params: [{"file_md5", file_md5}, {"mods", "#{mods}"}, {"m", "#{game_mode}"}, {"c", server_cookie}]) do
       {:ok, %HTTPoison.Response{body: body}} ->
         case Poison.decode body do
-          {:ok, %{"pp" => pp, "osu_beatmap" => %{"version" => version, "title" => title, "difficultyrating" => stars, "creator" => creator, "artist" => artist}}} ->
+          {:ok, %{"pp" => pp, "osu_beatmap" => %{"version" => version, "difficultyrating" => stars, "beatmapset" => %{"title" => title, "creator" => creator, "artist" => artist}}}} ->
 
             mod_string = mods_to_string(mods)
             mod_string = if mod_string != "" do
