@@ -1241,7 +1241,7 @@ defmodule Game.StateServer.Client do
           invitee ->
             match_password = String.replace(match_password, " ", "_")
             message = "Come join my multiplayer match: \"[osump://#{match_id}/#{match_password} #{match_name}]\""
-            Logger.warn "Sending message \"#{message}\" to #{Color.username(user.username)}"
+            Logger.warn "Sending message \"#{message}\" to #{Color.username(invitee.username)}"
             enqueue(invitee_id, Packet.send_message(user.username, message, invitee.username, user.id))
         end
     end
