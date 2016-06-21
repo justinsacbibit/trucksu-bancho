@@ -40,6 +40,7 @@ defmodule Game.StateServer.Client do
   @slot_status_ready 8
   @slot_status_no_map 16
   @slot_status_playing 32
+  @slot_status_playing_s "32"
   @slot_status_occupied 124
   @slot_status_playing_quit 128
 
@@ -1097,7 +1098,23 @@ defmodule Game.StateServer.Client do
               if user_id == host_user_id do
                 set_match_host(match_id, first_player_id)
               end
-              send_multi_update(match_id)
+
+              in_progress = @client |> Exredis.query(["HGET", match_key(match_id), "in_progress"])
+              if in_progress == "true" do
+                queries = for slot_id <- generate_slot_ids() do
+                  ["HGET", match_slot_key(match_id, slot_id), "status"]
+                end
+
+                still_playing = for @slot_status_playing_s <- @client |> Exredis.query_pipe(queries), do: :ok
+
+                if length(still_playing) == 0 do
+                  all_players_completed(match_id)
+                else
+                  send_multi_update(match_id)
+                end
+              else
+                send_multi_update(match_id)
+              end
           end
         else
           send_multi_update(match_id)
