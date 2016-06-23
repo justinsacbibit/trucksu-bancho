@@ -182,7 +182,7 @@ defmodule Game.Packet do
             new(Ids.server_userPanel, [
               {user.id, :uint32},
               {user.username, :string},
-              {user.timezone, :int8},
+              {user.timezone + 24, :int8},
               {country_id, :uint8},
               {user_rank, :uint8},
               {longitude, :float},
