@@ -85,7 +85,8 @@ defmodule Game.GameController do
   end
 
   defp handle_request(conn, body, []) do
-    [username, hashed_password | _] = String.split(body, "\n")
+    [username, hashed_password, extra | _] = String.split(body, "\n")
+    [_, timezone | _] = String.split(extra, "|")
 
     Logger.warn "Received login request for #{username}"
 
@@ -110,10 +111,15 @@ defmodule Game.GameController do
 
         location = conn.assigns[:location]
         country_code = conn.assigns[:country_code]
-        StateServer.Client.add_user(user, jwt, location, Utils.country_id(country_code))
 
-        changeset = Ecto.Changeset.change user, %{country: country_code}
-        Repo.update! changeset
+        timezone = case Integer.parse(timezone) do
+          {timezone, _} -> timezone
+          _ -> 0
+        end
+        changeset = Ecto.Changeset.change user, %{country: country_code, timezone: timezone}
+        user = Repo.update! changeset
+
+        StateServer.Client.add_user(user, jwt, location, Utils.country_id(country_code))
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
       {:ok, user} ->
