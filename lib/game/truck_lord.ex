@@ -53,6 +53,19 @@ defmodule Game.TruckLord do
   def handle_cast({:receive_message, message, user}, state) do
     Logger.warn "#{Color.username(user.username)} to TrucksuLord received message \"#{message}\""
 
+    handle_listening = fn(beatmap_id) ->
+      mods = 0
+      game_mode = 0
+      calculate_pp(user, beatmap_id, mods, game_mode)
+    end
+
+    handle_playing = fn(beatmap_id, rest) ->
+      mods = for "+" <> mod <- rest, do: mod
+      mods = convert_mod_strings(mods)
+      game_mode = 0
+      calculate_pp(user, beatmap_id, mods, game_mode)
+    end
+
     case message do
       "!np" ->
         action = StateServer.Client.action(user.id)
@@ -77,19 +90,18 @@ defmodule Game.TruckLord do
       <<1>> <> "ACTION is listening to [" <> url_and_stuff ->
         case String.split(url_and_stuff, " ") do
           ["http://osu.ppy.sh/b/" <> beatmap_id | _] ->
-            mods = 0
-            game_mode = 0
-            calculate_pp(user, beatmap_id, mods, game_mode)
+            handle_listening.(beatmap_id)
+          ["https://osu.ppy.sh/b/" <> beatmap_id | _] ->
+            handle_listening.(beatmap_id)
           s ->
             Logger.error "Received beatmap pp request, but was unable to parse out the beatmap id: #{inspect s}"
         end
       <<1>> <> "ACTION is playing [" <> url_and_stuff ->
         case String.split(url_and_stuff, " ") do
           ["http://osu.ppy.sh/b/" <> beatmap_id | rest] ->
-            mods = for "+" <> mod <- rest, do: mod
-            mods = convert_mod_strings(mods)
-            game_mode = 0
-            calculate_pp(user, beatmap_id, mods, game_mode)
+            handle_playing.(beatmap_id, rest)
+          ["https://osu.ppy.sh/b/" <> beatmap_id | rest] ->
+            handle_playing.(beatmap_id, rest)
           s ->
             Logger.error "Received beatmap pp request, but was unable to parse out the beatmap id: #{inspect s}"
         end
