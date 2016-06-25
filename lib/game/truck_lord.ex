@@ -74,6 +74,25 @@ defmodule Game.TruckLord do
                 calculate_pp(user, file_md5, mods, game_mode)
             end
         end
+      <<1>> <> "ACTION is listening to [" <> url_and_stuff ->
+        case String.split(url_and_stuff, " ") do
+          ["http://osu.ppy.sh/b/" <> beatmap_id | _] ->
+            mods = 0
+            game_mode = 0
+            calculate_pp(user, beatmap_id, mods, game_mode)
+          s ->
+            Logger.error "Received beatmap pp request, but was unable to parse out the beatmap id: #{inspect s}"
+        end
+      <<1>> <> "ACTION is playing [" <> url_and_stuff ->
+        case String.split(url_and_stuff, " ") do
+          ["http://osu.ppy.sh/b/" <> beatmap_id | rest] ->
+            mods = for "+" <> mod <- rest, do: mod
+            mods = convert_mod_strings(mods)
+            game_mode = 0
+            calculate_pp(user, beatmap_id, mods, game_mode)
+          s ->
+            Logger.error "Received beatmap pp request, but was unable to parse out the beatmap id: #{inspect s}"
+        end
       _ ->
         :ok
     end
@@ -118,11 +137,17 @@ defmodule Game.TruckLord do
     Enum.join(mod_strs, ",")
   end
 
-  defp calculate_pp(user, file_md5, mods, game_mode) do
-    Logger.warn "#{Color.username(user.username)} sent pp request: file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}"
+  defp calculate_pp(user, identifier, mods, game_mode) do
+    Logger.warn "#{Color.username(user.username)} sent pp request: identifier=#{identifier} mods=#{mods} game_mode=#{game_mode}"
     trucksu_api_url = Application.get_env(:game, :trucksu_api_url)
     server_cookie = Application.get_env(:game, :server_cookie)
-    case HTTPoison.get(trucksu_api_url <> "/v1/pp-calc", [], params: [{"file_md5", file_md5}, {"mods", "#{mods}"}, {"m", "#{game_mode}"}, {"c", server_cookie}]) do
+
+    identifier_param = case Integer.parse(identifier) do
+      {beatmap_id, _} -> {"b", beatmap_id}
+      _ -> {"file_md5", identifier}
+    end
+
+    case HTTPoison.get(trucksu_api_url <> "/v1/pp-calc", [], params: [identifier_param, {"mods", "#{mods}"}, {"m", "#{game_mode}"}, {"c", server_cookie}]) do
       {:ok, %HTTPoison.Response{body: body}} ->
         case Poison.decode body do
           {:ok, %{"pp" => pp, "osu_beatmap" => %{"version" => version, "difficultyrating" => stars, "beatmapset" => %{"title" => title, "creator" => creator, "artist" => artist}}}} ->
@@ -139,17 +164,17 @@ defmodule Game.TruckLord do
             StateServer.Client.enqueue(user.id, packet)
 
           {:error, error} ->
-            Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}: #{inspect error}"
+            Logger.error "Unable to calculate pp for identifier=#{identifier} mods=#{mods} game_mode=#{game_mode}: #{inspect error}"
             message = "Sorry, an error occurred. Please let a developer know."
             send_error_message(user, message)
 
           _ ->
-            Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}: #{inspect body}"
+            Logger.error "Unable to calculate pp for identifier=#{identifier} mods=#{mods} game_mode=#{game_mode}: #{inspect body}"
             message = "Sorry, an error occurred. Please let a developer know."
             send_error_message(user, message)
         end
       {:error, error} ->
-        Logger.error "Unable to calculate pp for file_md5=#{file_md5} mods=#{mods} game_mode=#{game_mode}: #{inspect error}"
+        Logger.error "Unable to calculate pp for identifier=#{identifier} mods=#{mods} game_mode=#{game_mode}: #{inspect error}"
 
         message = "I wasn't able to calculate the pp for that map - you might have an outdated version"
         send_error_message(user, message)
@@ -160,5 +185,21 @@ defmodule Game.TruckLord do
     Logger.warn "Sending message to #{user.username}: #{message}"
     packet = Packet.send_message(@username, message, user.username, @user_id)
     StateServer.Client.enqueue(user.id, packet)
+  end
+
+  defp convert_mod_strings(mod_strings) do
+    Enum.reduce(mod_strings, 0, fn mod_string, mods ->
+      mod = case mod_string do
+        "Hidden" -> 8
+        "Hidden" <> <<1>> -> 8
+        "HardRock" -> 16
+        "HardRock" <> <<1>> -> 16
+        "DoubleTime" -> 64
+        "DoubleTime" <> <<1>> -> 64
+        _ -> 0
+      end
+
+      mods ||| mod
+    end)
   end
 end
