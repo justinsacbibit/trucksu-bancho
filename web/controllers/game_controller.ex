@@ -18,6 +18,8 @@ defmodule Game.GameController do
   }
   alias Game.Utils.Color
 
+  @ban_message "You have been banned! If you believe you have been falsely banned or you want to confess and apologize for your misconduct, you may send an appeal to appeals@trucksu.com."
+
   plug :get_token
   plug :get_body
   plug :get_request_ip
@@ -124,7 +126,10 @@ defmodule Game.GameController do
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
       {:ok, user} ->
         Logger.warn "Login failed for banned user #{Color.username(username)}"
-        render prepare_conn(conn), "response.raw", data: Packet.login_failed
+        data = Packet.login_failed
+        <> Packet.notification(@ban_message)
+
+        render prepare_conn(conn), "response.raw", data: data
       {:error, reason} ->
         Logger.warn "Login failed for #{Color.username(username)}. Reason: #{reason}"
         render prepare_conn(conn), "response.raw", data: Packet.login_failed
@@ -139,32 +144,37 @@ defmodule Game.GameController do
         #       and the packet queue is empty
         {:ok, user} = Guardian.serializer.from_token(claims["sub"])
 
-        StateServer.Client.update_last_request_time(user.id)
+        if user.banned do
+          Packet.login_failed()
+          <> Packet.notification(@ban_message)
+        else
+          StateServer.Client.update_last_request_time(user.id)
 
-        # TODO: Return an error if the user is somehow not in the state
+          # TODO: Return an error if the user is somehow not in the state
 
-        decoded_packets = Packet.Decoder.decode_packets(stacked_packets)
+          decoded_packets = Packet.Decoder.decode_packets(stacked_packets)
 
-        Logger.debug inspect(decoded_packets)
+          Logger.debug inspect(decoded_packets)
 
-        data = decoded_packets
-        |> Enum.reduce(<<>>, fn({packet_id, data}, acc) ->
-          packet_response = handle_packet(packet_id, data, user)
+          data = decoded_packets
+          |> Enum.reduce(<<>>, fn({packet_id, data}, acc) ->
+            packet_response = handle_packet(packet_id, data, user)
 
-          if is_nil(packet_response) do
-            Logger.error "nil packet response for #{packet_id}: #{inspect data}"
-            Logger.error "#{inspect user}"
+            if is_nil(packet_response) do
+              Logger.error "nil packet response for #{packet_id}: #{inspect data}"
+              Logger.error "#{inspect user}"
 
-            packet_response = <<>>
-          end
+              packet_response = <<>>
+            end
 
-          acc <> packet_response
-        end)
+            acc <> packet_response
+          end)
 
-        packet_queue = StateServer.Client.dequeue(user.id)
-        data <> Enum.reduce(packet_queue, <<>>, fn(packet, acc) ->
-          acc <> packet
-        end)
+          packet_queue = StateServer.Client.dequeue(user.id)
+          data <> Enum.reduce(packet_queue, <<>>, fn(packet, acc) ->
+            acc <> packet
+          end)
+        end
 
       {:error, _reason} ->
         Packet.login_failed
