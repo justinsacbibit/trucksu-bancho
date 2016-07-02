@@ -21,6 +21,7 @@
   "httpoison": {:hex, :httpoison, "0.8.3", "b675a3fdc839a0b8d7a285c6b3747d6d596ae70b6ccb762233a990d7289ccae4", [:mix], [{:hackney, "~> 1.6.0", [hex: :hackney, optional: false]}]},
   "idna": {:hex, :idna, "1.2.0", "ac62ee99da068f43c50dc69acf700e03a62a348360126260e87f2b54eced86b2", [:rebar3], []},
   "jose": {:hex, :jose, "1.7.3", "325aa7e52b1376e11cb3ea3c8ecfd608cc9bb511d412123bcf81e095f8ed09e7", [:mix, :rebar], [{:base64url, "~> 0.0.1", [hex: :base64url, optional: false]}]},
+  "mailgun": {:hex, :mailgun, "0.1.2", "37c1306675cf27a66a13dea3c9d479da2a990f0aed296b5addbd0b07529b667d", [:mix], [{:poison, "~> 1.4", [hex: :poison, optional: false]}]},
   "metrics": {:hex, :metrics, "1.0.1", "25f094dea2cda98213cecc3aeff09e940299d950904393b2a29d191c346a8486", [:rebar3], []},
   "mimerl": {:hex, :mimerl, "1.0.2", "993f9b0e084083405ed8252b99460c4f0563e41729ab42d9074fd5e52439be88", [:rebar3], []},
   "phoenix": {:hex, :phoenix, "1.1.4", "65809fba92eb94377372a5fb5a561197654bb8406e773cc47ca1a031bbe58019", [:mix], [{:poison, "~> 1.5 or ~> 2.0", [hex: :poison, optional: false]}, {:plug, "~> 1.0", [hex: :plug, optional: false]}, {:cowboy, "~> 1.0", [hex: :cowboy, optional: true]}]},

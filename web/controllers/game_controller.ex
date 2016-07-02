@@ -617,5 +617,10 @@ defmodule Game.GameController do
     <> Enum.reduce(online_users, <<>>, &(&2 <> Packet.user_panel(&1)))
     <> Enum.reduce(online_users, <<>>, &(&2 <> Packet.user_stats(&1)))
     <> Packet.online_users
+    <> if not user.email_verified do
+      Packet.notification("Your email is not verified! Please visit trucksu.com to verify your email address.")
+    else
+      <<>>
+    end
   end
 end
