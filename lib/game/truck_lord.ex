@@ -175,13 +175,13 @@ defmodule Game.TruckLord do
             end
 
             to_2_decimal_places = fn(num) -> ((num * 100) |> Float.round) / 100 end
-            pp95 = to_2_decimal_places.(pp95)
-            pp98 = to_2_decimal_places.(pp98)
-            pp99 = to_2_decimal_places.(pp99)
-            pp100 = to_2_decimal_places.(pp100)
             stars = to_2_decimal_places.(stars)
+            pp95 = round(pp95)
+            pp98 = round(pp98)
+            pp99 = round(pp99)
+            pp100 = round(pp100)
 
-            message = "#{artist} - #{title} [#{version}]#{mod_string}  95%: #{pp95} | 98%: #{pp98} | 99%: #{pp99} | 100%: #{pp100} | (#{stars}*)"
+            message = "#{artist} - #{title} [#{version}]#{mod_string}  95%: #{pp95}pp | 98%: #{pp98}pp | 99%: #{pp99}pp | 100%: #{pp100}pp | (#{stars}*)"
             Logger.warn "Sending message to #{user.username}: #{message}"
             packet = Packet.send_message(@username, message, user.username, @user_id)
             StateServer.Client.enqueue(user.id, packet)
