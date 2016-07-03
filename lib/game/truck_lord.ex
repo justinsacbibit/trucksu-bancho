@@ -162,7 +162,7 @@ defmodule Game.TruckLord do
     case HTTPoison.get(trucksu_api_url <> "/v1/pp-calc", [], params: [identifier_param, {"mods", "#{mods}"}, {"m", "#{game_mode}"}, {"c", server_cookie}]) do
       {:ok, %HTTPoison.Response{body: body}} ->
         case Poison.decode body do
-          {:ok, %{"pp100" => pp, "osu_beatmap" => %{"version" => version, "difficultyrating" => stars, "beatmapset" => %{"title" => title, "creator" => creator, "artist" => artist}}}} ->
+          {:ok, %{"pp95" => pp95, "pp98" => pp98, "pp99" => pp99, "pp100" => pp100, "osu_beatmap" => %{"version" => version, "difficultyrating" => stars, "beatmapset" => %{"title" => title, "creator" => _creator, "artist" => artist}}}} ->
 
             mod_string = mods_to_string(mods)
             mod_string = if mod_string != "" do
@@ -170,7 +170,15 @@ defmodule Game.TruckLord do
             else
               ""
             end
-            message = "#{pp}pp for SS #{artist} - #{title} (#{creator}) [#{version}] (#{((stars * 100) |> Float.round) / 100}*)#{mod_string}"
+
+            to_2_decimal_places = fn(num) -> ((num * 100) |> Float.round) / 100 end
+            pp95 = to_2_decimal_places.(pp95)
+            pp98 = to_2_decimal_places.(pp98)
+            pp99 = to_2_decimal_places.(pp99)
+            pp100 = to_2_decimal_places.(pp100)
+            stars = to_2_decimal_places.(stars)
+
+            message = "#{artist} - #{title} [#{version}]#{mod_string}  95%: #{pp95} | 98%: #{pp98} | 99%: #{pp99} | 100%: #{pp100} | (#{stars}*)"
             Logger.warn "Sending message to #{user.username}: #{message}"
             packet = Packet.send_message(@username, message, user.username, @user_id)
             StateServer.Client.enqueue(user.id, packet)
