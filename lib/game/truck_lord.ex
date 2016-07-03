@@ -106,7 +106,10 @@ defmodule Game.TruckLord do
             Logger.error "Received beatmap pp request, but was unable to parse out the beatmap id: #{inspect s}"
         end
       _ ->
-        :ok
+        message = "Sorry, what was that?"
+        Logger.warn "Sending message to #{user.username}: #{message}"
+        packet = Packet.send_message(@username, message, user.username, @user_id)
+        StateServer.Client.enqueue(user.id, packet)
     end
 
     {:noreply, state}
