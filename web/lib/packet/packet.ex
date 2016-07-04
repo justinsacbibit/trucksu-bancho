@@ -6,6 +6,7 @@ defmodule Game.Packet do
   alias Game.StateServer
   alias Trucksu.{
     Repo,
+    Group,
     User,
     UserStats,
   }
@@ -79,22 +80,21 @@ defmodule Game.Packet do
 
   def main_menu_icon(icon), do: new(Ids.server_mainMenuIcon, [{icon, :string}])
 
-  def user_supporter_gmt(supporter, gmt) do
-    result = 1
+  def user_supporter_gmt(user) do
+    permissions = calculate_permissions(user)
+    new(Ids.server_supporterGMT, [{permissions, :uint32}])
+  end
 
-    result = result + if supporter do
-      4
-    else
-      0
-    end
+  defp calculate_permissions(user) do
+    # TODO: Friend = 8
+    gmt = if User.is_in_group(user, Group.global_moderation_team_id) do 2 else 0 end
+    dev = if User.is_in_group(user, Group.development_team_id) do 16 else 0 end
+    supporter = 4
 
-    result = result + if gmt do
-      2
-    else
-      0
-    end
-
-    new(Ids.server_supporterGMT, [{result, :uint32}])
+    1
+    ||| gmt
+    ||| supporter
+    ||| dev
   end
 
   @doc """
@@ -129,7 +129,7 @@ defmodule Game.Packet do
   end
 
   def user_panel(user) do
-    trucklord_user_id = TruckLord.user_id
+    # trucklord_user_id = TruckLord.user_id
     case user.id do
       #^trucklord_user_id ->
       #  user_panel(user, nil)
@@ -149,12 +149,13 @@ defmodule Game.Packet do
     trucklord_user_id = TruckLord.user_id
     case user.id do
       ^trucklord_user_id ->
+        user_rank = 2
         new(Ids.server_userPanel, [
-          {user.id, :uint32},
+          {-user.id, :int32},
           {user.username, :string},
           {0, :uint8},
           {0, :uint8},
-          {4, :uint8},
+          {user_rank, :uint8},
           {0.0, :float},
           {0.0, :float},
           {0, :uint32},
@@ -164,7 +165,7 @@ defmodule Game.Packet do
         {[latitude, longitude], country_id} = StateServer.Client.user_location(user.id)
 
         # TODO: timezone
-        user_rank = 0 # normal
+        user_rank = calculate_permissions(user)
 
         user_id = user.id
         game_mode = action[:game_mode]

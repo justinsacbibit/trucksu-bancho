@@ -124,7 +124,7 @@ defmodule Game.GameController do
         StateServer.Client.add_user(user, jwt, location, Utils.country_id(country_code))
 
         render prepare_conn(conn, jwt), "response.raw", data: login_packets(user)
-      {:ok, user} ->
+      {:ok, _user} ->
         Logger.warn "Login failed for banned user #{Color.username(username)}"
         data = Packet.login_failed
         <> Packet.notification(@ban_message)
@@ -160,11 +160,13 @@ defmodule Game.GameController do
           |> Enum.reduce(<<>>, fn({packet_id, data}, acc) ->
             packet_response = handle_packet(packet_id, data, user)
 
-            if is_nil(packet_response) do
+            packet_response = if is_nil(packet_response) do
               Logger.error "nil packet response for #{packet_id}: #{inspect data}"
               Logger.error "#{inspect user}"
 
-              packet_response = <<>>
+              <<>>
+            else
+              packet_response
             end
 
             acc <> packet_response
@@ -599,12 +601,10 @@ defmodule Game.GameController do
       Repo.get! User, user_id
     end)
 
-    # Logger.warn "online users: #{inspect online_users}"
-
     Packet.silence_end_time(0)
     <> Packet.user_id(user.id)
     <> Packet.protocol_version
-    <> Packet.user_supporter_gmt(true, false)
+    <> Packet.user_supporter_gmt(user)
     <> user_panel_packet
     <> user_stats_packet
     <> Packet.channel_info_end

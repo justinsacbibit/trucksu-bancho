@@ -20,7 +20,7 @@ defmodule Game.EventController do
           "creator" => creator,
         } = params
 
-        bot = Repo.get User, 2 # TODO: Remove hardcoding
+        bot = Repo.get User, 1 # TODO: Remove hardcoding
 
         # TODO: Use beatmap_id
         message = "You just achieved #{pp}pp on #{artist} - #{title} [#{version}]!"

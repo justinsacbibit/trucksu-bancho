@@ -181,7 +181,7 @@ defmodule Game.StateServer.Client do
     remove_user_from_channels(user_id)
   end
 
-  defp remove_spectators(user_id) do
+  defp remove_spectators(_user_id) do
     # TODO
   end
 
@@ -1214,7 +1214,7 @@ defmodule Game.StateServer.Client do
     end
   end
 
-  def match_change_password(user, data) do
+  def match_change_password(_user, data) do
     # TODO: Verify host
 
     match_id = data[:match_id]
