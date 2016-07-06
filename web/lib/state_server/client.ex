@@ -16,7 +16,7 @@ defmodule Game.StateServer.Client do
   @matches_key "matches"
 
   # Determines the amount of time to ignore logout requests after logging in.
-  @recently_logged_in_threshold 10 # seconds
+  @recently_logged_in_threshold 4 # seconds
 
   ## match scoring types
   @match_scoring_type_score 0
@@ -152,6 +152,28 @@ defmodule Game.StateServer.Client do
     user_stats_packet = Packet.user_stats(user)
     enqueue_all(user_panel_packet)
     enqueue_all(user_stats_packet)
+
+    post_bancho_event %{
+      "type" => "user_online",
+      "user" => %{
+        "id" => user.id,
+        "username" => user.username,
+        "action" => action(user.id) |> Enum.into(%{}),
+      },
+    }
+  end
+
+  defp post_bancho_event(body) do
+    Task.start(fn ->
+      trucksu_api_url = Application.get_env(:game, :trucksu_api_url)
+      json = Poison.encode! body
+      case HTTPoison.post(trucksu_api_url <> "/v1/bancho-events", json, [{"Content-Type", "application/json"}]) do
+        {:ok, _} ->
+          Logger.info "Successfully posted bancho event"
+        {:error, error} ->
+          Logger.error "Failed to post bancho event: #{inspect error}"
+      end
+    end)
   end
 
   @doc """
@@ -179,6 +201,13 @@ defmodule Game.StateServer.Client do
     enqueue_all(logout_packet)
 
     remove_user_from_channels(user_id)
+
+    post_bancho_event %{
+      "type" => "user_offline",
+      "user" => %{
+        "id" => user_id,
+      },
+    }
   end
 
   defp remove_spectators(_user_id) do
@@ -383,6 +412,15 @@ defmodule Game.StateServer.Client do
     user_stats_packet = Packet.user_stats(user, action)
     enqueue_all(user_panel_packet)
     enqueue_all(user_stats_packet)
+
+    post_bancho_event %{
+      "type" => "user_change_action",
+      "user" => %{
+        "id" => user.id,
+        "username" => user.username,
+        "action" => action(user.id) |> Enum.into(%{}),
+      },
+    }
   end
 
   @doc """

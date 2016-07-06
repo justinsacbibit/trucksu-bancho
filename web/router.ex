@@ -7,6 +7,13 @@ defmodule Game.Router do
 
   scope "/api", Game do
     pipe_through :api
+
+    scope "/v1" do
+      scope "/users" do
+        get "/", UserController, :index
+        get "/:id", UserController, :show
+      end
+    end
   end
 
   scope "/", Game do
