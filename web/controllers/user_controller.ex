@@ -19,6 +19,7 @@ defmodule Game.UserController do
   end
 
   def show(conn, %{"id" => id}) do
+    {id, _} = Integer.parse(id)
     case Client.action(id) do
       action when is_list(action) ->
         conn
