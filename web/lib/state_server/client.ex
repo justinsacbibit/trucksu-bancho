@@ -852,9 +852,9 @@ defmodule Game.StateServer.Client do
     # TODO: Compare data[:match_id] and the user's current match id
     match_id = data[:match_id]
 
-    [old_mods, old_beatmap_md5] = @client |> Exredis.query([
+    [old_mods, old_beatmap_md5, old_match_mod_mode] = @client |> Exredis.query([
       "HMGET", match_key(match_id),
-      "mods", "beatmap_md5",
+      "mods", "beatmap_md5", "match_mod_mode",
     ])
 
     case old_mods do
@@ -902,8 +902,9 @@ defmodule Game.StateServer.Client do
 
           queries ++ mod_queries
         else
-          # TODO: Possibly reset match mods if freemod?
-          queries
+          # Update match mods if freemod
+          mods = compute_match_mods(match_mod_mode, mods)
+          queries ++ [["HSET", match_key(match_id), "mods", "#{mods}"]]
         end
 
         # TODO: Teams
@@ -1330,12 +1331,7 @@ defmodule Game.StateServer.Client do
         ]
 
         queries = if host_user_id == user.id do
-          match_mods = if match_mod_mode == @match_mod_mode_free_mod do
-            # DT, HT, NC
-            mods &&& (64 ||| 256 ||| 512)
-          else
-            mods
-          end
+          match_mods = compute_match_mods(match_mod_mode, mods)
           query = ["HSET", match_key(match_id), "mods", "#{match_mods}"]
           [query, change_own_mod_query]
         else
@@ -1349,6 +1345,15 @@ defmodule Game.StateServer.Client do
         @client |> Exredis.query_pipe(queries)
 
         send_multi_update(match_id)
+    end
+  end
+
+  defp compute_match_mods(match_mod_mode, mods) do
+    if match_mod_mode == @match_mod_mode_free_mod do
+      # DT, HT, NC
+      mods &&& (64 ||| 256 ||| 512)
+    else
+      mods
     end
   end
 
