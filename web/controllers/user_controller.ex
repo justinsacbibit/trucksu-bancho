@@ -18,9 +18,19 @@ defmodule Game.UserController do
     |> json(users)
   end
 
-  def show(conn, params) do
-    # TODO
-    conn
+  def show(conn, %{"id" => id}) do
+    case Client.action(id) do
+      action when is_list(action) ->
+        conn
+        |> json(%{
+          id: id,
+          action: action |> Enum.into(%{}),
+        })
+      _ ->
+        conn
+        |> put_status(404)
+        |> json(%{"ok" => false})
+    end
   end
 end
 
