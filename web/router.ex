@@ -9,6 +9,8 @@ defmodule Game.Router do
     pipe_through :api
 
     scope "/v1" do
+      get "/matches", MatchController, :index
+
       scope "/users" do
         get "/", UserController, :index
         get "/:id", UserController, :show

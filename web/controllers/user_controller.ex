@@ -4,7 +4,7 @@ defmodule Game.UserController do
 
   # TODO: Check cookie
 
-  def index(conn, params) do
+  def index(conn, _params) do
     users = for user_id <- Client.user_ids(),
       action = Client.action(user_id),
       is_list(action) do

@@ -154,8 +154,8 @@ defmodule Game.StateServer.Client do
     enqueue_all(user_stats_packet)
 
     post_bancho_event %{
-      "type" => "user_online",
-      "user" => %{
+      "type" => "user_online", # TODO: Constantize types
+      "user" => %{ # TODO: Define schema
         "id" => user.id,
         "username" => user.username,
         "action" => action(user.id) |> Enum.into(%{}),
@@ -163,6 +163,7 @@ defmodule Game.StateServer.Client do
     }
   end
 
+  # TODO: Refactor into another module
   defp post_bancho_event(body) do
     Task.start(fn ->
       trucksu_api_url = Application.get_env(:game, :trucksu_api_url)
@@ -171,6 +172,7 @@ defmodule Game.StateServer.Client do
         {:ok, _} ->
           Logger.info "Successfully posted bancho event"
         {:error, error} ->
+          # TODO: Send an email
           Logger.error "Failed to post bancho event: #{inspect error}"
       end
     end)
@@ -618,13 +620,19 @@ defmodule Game.StateServer.Client do
     @client |> Exredis.query(["SADD", @lobby_key, user_id])
 
     # Enqueue all matches to the user who just joined the lobby
-    match_ids = @client |> Exredis.query(["SMEMBERS", @matches_key])
-    packets = for match_id <- match_ids, {match_id, _} = Integer.parse(match_id) do
-      Packet.create_match(match_data(match_id))
+    packets = for match_data <- all_match_data() do
+      Packet.create_match(match_data)
     end
 
     packet = Enum.reduce(packets, <<>>, &<>/2)
     enqueue(user_id, packet)
+  end
+
+  def all_match_data() do
+    match_ids = @client |> Exredis.query(["SMEMBERS", @matches_key])
+    for match_id <- match_ids, {match_id, _} = Integer.parse(match_id) do
+      match_data(match_id)
+    end
   end
 
   @doc """
@@ -692,9 +700,14 @@ defmodule Game.StateServer.Client do
     lobby_user_ids = @client |> Exredis.query(["SMEMBERS", @lobby_key])
     match = match_data(match_id)
     for lobby_user_id <- lobby_user_ids, do: enqueue(lobby_user_id, Packet.create_match(match))
+
+    post_bancho_event %{
+      "type" => "match_create", # TODO: Constantize types
+      "match" => Game.MatchView.render("show.json", %{match: match}),
+    }
   end
 
-  defp match_data(match_id) do
+  def match_data(match_id) do
     query1 = [
       "HMGET",
       match_key(match_id),
@@ -1046,6 +1059,11 @@ defmodule Game.StateServer.Client do
     for lobby_user_id <- lobby_user_ids, {lobby_user_id, _} = Integer.parse(lobby_user_id) do
       enqueue(lobby_user_id, Packet.update_match(match))
     end
+
+    post_bancho_event %{
+      "type" => "match_update", # TODO: Constantize types
+      "match" => Game.MatchView.render("show.json", %{match: match}),
+    }
   end
 
   @doc """
@@ -1178,6 +1196,13 @@ defmodule Game.StateServer.Client do
     for lobby_user_id <- lobby_user_ids, {lobby_user_id, _} = Integer.parse(lobby_user_id) do
       enqueue(lobby_user_id, Packet.dispose_match(match_id))
     end
+
+    post_bancho_event %{
+      "type" => "match_destroy", # TODO: Constantize types
+      "match" => %{ # TODO: Define schema
+        "id" => match_id,
+      },
+    }
   end
 
   @doc """
