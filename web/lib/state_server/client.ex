@@ -865,9 +865,9 @@ defmodule Game.StateServer.Client do
     # TODO: Compare data[:match_id] and the user's current match id
     match_id = data[:match_id]
 
-    [old_mods, old_beatmap_md5, old_match_mod_mode] = @client |> Exredis.query([
+    [old_mods, old_beatmap_md5] = @client |> Exredis.query([
       "HMGET", match_key(match_id),
-      "mods", "beatmap_md5", "match_mod_mode",
+      "mods", "beatmap_md5",
     ])
 
     case old_mods do
