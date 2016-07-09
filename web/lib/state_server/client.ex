@@ -1200,7 +1200,7 @@ defmodule Game.StateServer.Client do
     post_bancho_event %{
       "type" => "match_destroy", # TODO: Constantize types
       "match" => %{ # TODO: Define schema
-        "id" => match_id,
+        "match_id" => match_id,
       },
     }
   end
