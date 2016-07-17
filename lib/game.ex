@@ -14,6 +14,7 @@ defmodule Game do
       # worker(Game.Worker, [arg1, arg2, arg3]),
       worker(Game.Redis, [:redis]),
       worker(Game.UserTimeout, []),
+      worker(Game.MatchJanitor, []),
       worker(Game.TruckLord, []),
     ]
 

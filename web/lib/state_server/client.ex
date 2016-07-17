@@ -636,6 +636,20 @@ defmodule Game.StateServer.Client do
   end
 
   @doc """
+  Disposes of empty matches.
+  """
+  def dispose_empty_matches() do
+    Enum.each(all_match_data(), fn(match_data) ->
+      case Enum.count(match_data[:slots], fn(slot) -> slot[:user_id] != -1 end) do
+        0 ->
+          dispose_match(match_data[:match_id])
+        _ ->
+          :ok
+      end
+    end)
+  end
+
+  @doc """
   Removes a player from the multiplayer lobby.
   """
   def part_lobby(user_id) do
