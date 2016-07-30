@@ -325,7 +325,10 @@ defmodule Game.StateServer.Client do
   Checks if the user with the given id is connected.
   """
   def is_connected(user_id) do
-    @client |> Exredis.query(["EXISTS", user_key(user_id)])
+    case @client |> Exredis.query(["EXISTS", user_key(user_id)]) do
+      "0" -> false
+      "1" -> true
+    end
   end
 
   @doc """
@@ -645,7 +648,7 @@ defmodule Game.StateServer.Client do
   """
   def dispose_empty_matches() do
     Enum.each(all_match_data(), fn(match_data) ->
-    match_id = match_data[:match_id]
+      match_id = match_data[:match_id]
       # find slots with users in them
       case Enum.filter(match_data[:slots], fn(slot) -> slot[:user_id] != -1 end) do
         [] ->
