@@ -18,7 +18,7 @@ defmodule Game.Mixfile do
   def application do
     [mod: {Game, []},
      applications: [:phoenix, :cowboy, :logger, :gettext, :timex, :httpoison,
-                    :postgrex]]
+                    :postgrex, :ex_statsd]]
   end
 
   # Specifies which paths to compile per environment.
@@ -33,6 +33,7 @@ defmodule Game.Mixfile do
      {:gettext, "~> 0.9"},
      {:cowboy, "~> 1.0"},
      {:exredis, git: "https://github.com/artemeff/exredis.git"},
+     {:ex_statsd, git: "https://github.com/CargoSense/ex_statsd.git"},
      {:timex, "2.1.4"},
      {:httpoison, ">= 0.0.0"},
      {:trucksu, path: "./trucksu-web"}]

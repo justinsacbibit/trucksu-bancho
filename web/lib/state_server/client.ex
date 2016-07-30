@@ -113,6 +113,8 @@ defmodule Game.StateServer.Client do
   If the user is already in the state, resets their state.
   """
   def add_user(user, token, [lat, lon] \\ [0.0, 0.0], country_id \\ 0) do
+    ExStatsD.increment "logins"
+
     remove_user_from_channels(user.id)
 
     {time0, time1, time2} = Time.now
