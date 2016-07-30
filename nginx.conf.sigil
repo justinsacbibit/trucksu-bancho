@@ -34,11 +34,11 @@ server {
 }
 server {
   listen      80;
-  listen      443 ssl;
+  #listen      443 ssl;
   server_name c.trucksu.com c1.trucksu.com;
 
-  ssl_certificate     /etc/letsencrypt/live/b.trucksu.com/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/b.trucksu.com/privkey.pem;
+  #ssl_certificate     /etc/letsencrypt/live/b.trucksu.com/fullchain.pem;
+  #ssl_certificate_key /etc/letsencrypt/live/b.trucksu.com/privkey.pem;
 
   access_log /var/log/nginx/{{ .APP }}-access.log;
   error_log /var/log/nginx/{{ .APP }}-error.log;
