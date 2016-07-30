@@ -94,11 +94,16 @@ defmodule Game.StateServer.Client do
       "last_request_time2",
     ])
 
-    {time0, _} = Integer.parse(time0)
-    {time1, _} = Integer.parse(time1)
-    {time2, _} = Integer.parse(time2)
+    invalid = time0 == :undefined or time1 == :undefined or time2 == :undefined
+    if invalid do
+      {0, 0, 0}
+    else
+      {time0, _} = Integer.parse(time0)
+      {time1, _} = Integer.parse(time1)
+      {time2, _} = Integer.parse(time2)
 
-    {time0, time1, time2}
+      {time0, time1, time2}
+    end
   end
 
   @doc """
@@ -640,9 +645,18 @@ defmodule Game.StateServer.Client do
   """
   def dispose_empty_matches() do
     Enum.each(all_match_data(), fn(match_data) ->
-      case Enum.count(match_data[:slots], fn(slot) -> slot[:user_id] != -1 end) do
-        0 ->
-          dispose_match(match_data[:match_id])
+    match_id = match_data[:match_id]
+      # find slots with users in them
+      case Enum.filter(match_data[:slots], fn(slot) -> slot[:user_id] != -1 end) do
+        [] ->
+          # no users in match
+          dispose_match(match_id)
+        [slot] ->
+          # check that the user is online
+          user_id = slot[:user_id]
+          if not is_connected(user_id) do
+            dispose_match(match_id)
+          end
         _ ->
           :ok
       end

@@ -21,8 +21,10 @@ defmodule Game.UserTimeout do
       time = StateServer.Client.retrieve_last_request_time(user_id)
 
       if Time.diff(Time.now, time, :seconds) > @expire do
-        user = Repo.get! User, user_id
-        Logger.warn "Disconnecting #{Color.username(user.username)}"
+        user = Repo.get User, user_id
+        if user do
+          Logger.info "Disconnecting #{Color.username(user.username)}"
+        end
         StateServer.Client.remove_user(user_id)
       end
     end
