@@ -1,8 +1,13 @@
 defmodule Game.LayoutView do
   use Game.Web, :view
 
-  def render("app.html", %{user: user}) do
-    "trucksu!Bancho - #{user.username}"
+  def render("app.html", %{online: online}) do
+    status = if online do
+      "Online"
+    else
+      "Offline"
+    end
+    "trucksu!Bancho - #{status}"
   end
 end
 

@@ -3,8 +3,9 @@ defmodule Game.PageController do
   alias Trucksu.{Repo, User}
 
   def index(conn, _params) do
-    user = Repo.get! User, 1
-    render conn, "index.html", user: user
+    user = Repo.get User, 1
+    online = not is_nil(user)
+    render conn, "index.html", online: online
   end
 end
 
