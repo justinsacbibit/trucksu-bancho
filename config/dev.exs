@@ -19,6 +19,7 @@ config :game, Game.Endpoint,
 config :game,
   server_cookie: "a",
   trucksu_api_url: "http://localhost:4000/api",
+  website_url: System.get_env("WEBSITE_URL") || "http://localhost:4001",
   get_request_location: true
 
 # Set a higher stacktrace during development.

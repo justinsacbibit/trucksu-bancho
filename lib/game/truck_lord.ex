@@ -32,11 +32,9 @@ defmodule Game.TruckLord do
 
   @doc """
   Returns the user id of TruckLord.
-
-  The usefulness of this is debateable.
   """
   def user_id() do
-    GenServer.call(@name, :user_id)
+    @user_id
   end
 
   @doc """
@@ -117,10 +115,6 @@ defmodule Game.TruckLord do
 
   def handle_call(:is_online?, _from, state) do
     {:reply, true, state}
-  end
-
-  def handle_call(:user_id, _from, state) do
-    {:reply, @user_id, state}
   end
 
   def handle_call(:username, _from, state) do

@@ -296,7 +296,7 @@ defmodule Game.StateServer.Client do
   @doc """
   Sends a public message to a channel.
   """
-  def send_public_message(channel, packet, from_user_id) do
+  def send_public_message(channel, packet, from_user_id \\ nil) do
     queries = @client
     |> Exredis.query(["SMEMBERS", channel_key(channel)])
     |> Enum.filter_map(fn user_id ->
