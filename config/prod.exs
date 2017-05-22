@@ -21,11 +21,8 @@ config :logger, level: :info
 
 config :trucksu, Trucksu.Repo,
   adapter: Ecto.Adapters.Postgres,
-  username: System.get_env("DB_USERNAME"),
-  password: System.get_env("DB_PASSWORD"),
-  database: System.get_env("DB_DATABASE"),
-  hostname: System.get_env("DB_HOSTNAME"),
-  pool_size: 10
+  url: System.get_env("DATABASE_URL"),
+  pool_size: 20
 
 config :exredis,
   url: System.get_env("REDIS_URL"),
