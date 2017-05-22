@@ -27,11 +27,6 @@ config :trucksu, Trucksu.Repo,
   hostname: System.get_env("DB_HOSTNAME"),
   pool_size: 10
 
-config :ex_statsd,
-  host: System.get_env("STATSD_HOST"),
-  port: 8125,
-  namespace: "trucksu.bancho"
-
 config :exredis,
   url: System.get_env("REDIS_URL"),
   reconnect: :no_reconnect,

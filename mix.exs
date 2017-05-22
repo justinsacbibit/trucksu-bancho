@@ -18,7 +18,7 @@ defmodule Game.Mixfile do
   def application do
     [mod: {Game, []},
      applications: [:phoenix, :cowboy, :logger, :gettext, :timex, :httpoison,
-                    :postgrex, :ex_statsd]]
+                    :postgrex]]
   end
 
   # Specifies which paths to compile per environment.
