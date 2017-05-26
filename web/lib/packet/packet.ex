@@ -93,7 +93,7 @@ defmodule Game.Packet do
 
     1
     ||| gmt
-    ||| supporter
+#    ||| supporter
     ||| dev
   end
 
